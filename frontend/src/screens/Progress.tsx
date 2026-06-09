@@ -1,0 +1,149 @@
+import { useState, useEffect } from 'react';
+import { api } from '../api/client';
+
+export function Progress() {
+  const [weightLog, setWeightLog] = useState<{ weight: number; log_date: string }[]>([]);
+  const [cookedCount, setCookedCount] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [achievements, setAchievements] = useState<{ id: string; title: string; unlocked: boolean }[]>([]);
+  const [todayWeight, setTodayWeight] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    loadProgress();
+  }, []);
+
+  const loadProgress = async () => {
+    try {
+      const data = await api.getProgress();
+      setWeightLog(data.weightLog);
+      setCookedCount(data.cookedCount);
+      setStreak(data.streak);
+      setAchievements(data.achievements);
+    } catch { /* ignore */ }
+  };
+
+  const handleSaveWeight = async () => {
+    const w = Number(todayWeight);
+    if (!w || w < 30 || w > 300) return;
+    setSaving(true);
+    try {
+      await api.saveWeight(w);
+      await loadProgress();
+      setTodayWeight('');
+    } catch { /* ignore */ }
+    finally {
+      setSaving(false);
+    }
+  };
+
+  const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  return (
+    <div className="screen-content">
+      <h2 style={{ fontSize: 22, marginBottom: 16 }}>Прогресс 📊</h2>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 8 }}>Мой вес сегодня · {today}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="number"
+            value={todayWeight}
+            onChange={(e) => setTodayWeight(e.target.value)}
+            placeholder="кг"
+            style={{
+              flex: 1,
+              padding: '12px 16px',
+              border: '2px solid var(--border)',
+              borderRadius: 12,
+              fontSize: 16,
+            }}
+          />
+          <button className="btn-primary" onClick={handleSaveWeight} disabled={saving} style={{ width: 'auto', padding: '12px 20px' }}>
+            Сохранить
+          </button>
+        </div>
+      </div>
+
+      {weightLog.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize: 16, marginBottom: 12 }}>График веса</h3>
+          <WeightChart data={weightLog} />
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+        <StatCard label="Рецептов приготовлено" value={cookedCount} icon="👨‍🍳" />
+        <StatCard label="Дней подряд" value={streak} icon="🔥" />
+      </div>
+
+      <h3 style={{ fontSize: 16, marginBottom: 12 }}>Достижения</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {achievements.map((a) => (
+          <div
+            key={a.id}
+            className="card"
+            style={{
+              opacity: a.unlocked ? 1 : 0.5,
+              marginBottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <span style={{ fontSize: 24 }}>{a.unlocked ? '✅' : '🔒'}</span>
+            <span style={{ fontSize: 15, fontWeight: a.unlocked ? 600 : 400 }}>{a.title}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon }: { label: string; value: number; icon: string }) {
+  return (
+    <div className="card" style={{ textAlign: 'center', marginBottom: 0 }}>
+      <div style={{ fontSize: 28 }}>{icon}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--primary)', margin: '4px 0' }}>{value}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</div>
+    </div>
+  );
+}
+
+function WeightChart({ data }: { data: { weight: number; log_date: string }[] }) {
+  const maxW = Math.max(...data.map((d) => d.weight)) + 2;
+  const minW = Math.min(...data.map((d) => d.weight)) - 2;
+  const range = maxW - minW || 1;
+  const width = 300;
+  const height = 120;
+  const padding = 20;
+
+  const points = data.map((d, i) => {
+    const x = padding + (i / Math.max(data.length - 1, 1)) * (width - 2 * padding);
+    const y = height - padding - ((d.weight - minW) / range) * (height - 2 * padding);
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 140 }}>
+      <polyline
+        fill="none"
+        stroke="var(--primary)"
+        strokeWidth="2.5"
+        points={points}
+      />
+      {data.map((d, i) => {
+        const x = padding + (i / Math.max(data.length - 1, 1)) * (width - 2 * padding);
+        const y = height - padding - ((d.weight - minW) / range) * (height - 2 * padding);
+        return (
+          <g key={i}>
+            <circle cx={x} cy={y} r="4" fill="var(--primary)" />
+            <text x={x} y={height - 4} textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+              {new Date(d.log_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
