@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { db } from '../db/schema.js';
+import { getLatestPlan, insertCookedRecipe } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
@@ -11,10 +11,8 @@ const MEAL_TYPE_LABELS: Record<string, string> = {
   snack: 'Перекус',
 };
 
-router.get('/', (req: AuthRequest, res: Response) => {
-  const plan = db.prepare(`
-    SELECT plan_data FROM week_plans WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 1
-  `).get(req.telegramId) as { plan_data: string } | undefined;
+router.get('/', async (req: AuthRequest, res: Response) => {
+  const plan = await getLatestPlan(req.telegramId!);
 
   if (!plan) {
     return res.json({ recipes: [] });
@@ -48,16 +46,13 @@ router.get('/', (req: AuthRequest, res: Response) => {
   res.json({ recipes });
 });
 
-router.post('/cooked', (req: AuthRequest, res: Response) => {
+router.post('/cooked', async (req: AuthRequest, res: Response) => {
   const { recipeName } = req.body;
   if (!recipeName) {
     return res.status(400).json({ error: 'Название рецепта обязательно' });
   }
 
-  db.prepare('INSERT INTO cooked_recipes (telegram_id, recipe_name) VALUES (?, ?)').run(
-    req.telegramId,
-    recipeName
-  );
+  await insertCookedRecipe(req.telegramId!, recipeName);
 
   res.json({ success: true });
 });

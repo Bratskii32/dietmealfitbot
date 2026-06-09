@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { db } from '../db/schema.js';
+import { getUser, getLatestPlan, insertPlan, updateUserLastPlanRefresh, parseAllergies } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { generateMealPlan } from '../services/claude.js';
 
@@ -9,10 +9,8 @@ function getToday(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-router.get('/', (req: AuthRequest, res: Response) => {
-  const plan = db.prepare(`
-    SELECT * FROM week_plans WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 1
-  `).get(req.telegramId) as { plan_data: string } | undefined;
+router.get('/', async (req: AuthRequest, res: Response) => {
+  const plan = await getLatestPlan(req.telegramId!);
 
   if (!plan) {
     return res.json({ plan: null });
@@ -22,7 +20,7 @@ router.get('/', (req: AuthRequest, res: Response) => {
 });
 
 router.post('/generate', async (req: AuthRequest, res: Response) => {
-  const user = db.prepare('SELECT * FROM users WHERE telegram_id = ?').get(req.telegramId) as Record<string, unknown> | undefined;
+  const user = await getUser(req.telegramId!);
 
   if (!user) {
     return res.status(404).json({ error: 'Пользователь не найден' });
@@ -40,28 +38,21 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
 
   try {
     const profile = {
-      name: user.name as string,
-      age: user.age as number,
-      gender: user.gender as string,
-      height: user.height as number,
-      weight: user.weight as number,
-      goal: user.goal as string,
-      activityLevel: user.activity_level as string,
-      mealsPerDay: user.meals_per_day as number,
-      allergies: user.allergies ? JSON.parse(user.allergies as string) : [],
+      name: user.name,
+      age: user.age,
+      gender: user.gender,
+      height: user.height,
+      weight: user.weight,
+      goal: user.goal,
+      activityLevel: user.activity_level,
+      mealsPerDay: user.meals_per_day,
+      allergies: parseAllergies(user),
     };
 
     const plan = await generateMealPlan(profile);
 
-    db.prepare('INSERT INTO week_plans (telegram_id, plan_data) VALUES (?, ?)').run(
-      req.telegramId,
-      JSON.stringify(plan)
-    );
-
-    db.prepare(`UPDATE users SET last_plan_refresh = ?, updated_at = datetime('now') WHERE telegram_id = ?`).run(
-      today,
-      req.telegramId
-    );
+    await insertPlan(req.telegramId!, JSON.stringify(plan));
+    await updateUserLastPlanRefresh(req.telegramId!, today);
 
     res.json({ plan, canRefresh: isPremium });
   } catch (error) {
@@ -70,10 +61,8 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.get('/refresh-status', (req: AuthRequest, res: Response) => {
-  const user = db.prepare('SELECT is_premium, last_plan_refresh FROM users WHERE telegram_id = ?').get(req.telegramId) as
-    | { is_premium: number; last_plan_refresh: string }
-    | undefined;
+router.get('/refresh-status', async (req: AuthRequest, res: Response) => {
+  const user = await getUser(req.telegramId!);
 
   if (!user) {
     return res.json({ canRefresh: true });

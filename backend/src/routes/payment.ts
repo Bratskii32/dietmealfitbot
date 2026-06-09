@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { db } from '../db/schema.js';
+import { activatePremium } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { getBot } from '../bot/instance.js';
 
@@ -48,7 +48,7 @@ router.post('/invoice', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/activate', (req: AuthRequest, res: Response) => {
+router.post('/activate', async (req: AuthRequest, res: Response) => {
   const { plan } = req.body;
   if (!['monthly', 'yearly'].includes(plan)) {
     return res.status(400).json({ error: 'Неверный план' });
@@ -62,10 +62,7 @@ router.post('/activate', (req: AuthRequest, res: Response) => {
     premiumUntil.setFullYear(premiumUntil.getFullYear() + 1);
   }
 
-  db.prepare(`
-    UPDATE users SET is_premium = 1, premium_until = ?, updated_at = datetime('now')
-    WHERE telegram_id = ?
-  `).run(premiumUntil.toISOString(), req.telegramId);
+  await activatePremium(req.telegramId!, premiumUntil.toISOString());
 
   res.json({ success: true, premiumUntil: premiumUntil.toISOString() });
 });

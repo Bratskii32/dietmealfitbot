@@ -1,5 +1,5 @@
 import TelegramBot from 'node-telegram-bot-api';
-import { db } from '../db/schema.js';
+import { deleteUserData, upsertPremiumUser } from '../db/repository.js';
 
 const PRIVACY_POLICY = `📄 Политика конфиденциальности @dietmealfitbot
 
@@ -63,18 +63,7 @@ export function initBot(): TelegramBot | null {
 
     if (!telegramId) return;
 
-    const tables = [
-      'cooked_recipes',
-      'weight_log',
-      'daily_queries',
-      'chat_messages',
-      'week_plans',
-      'users',
-    ];
-
-    for (const table of tables) {
-      db.prepare(`DELETE FROM ${table} WHERE telegram_id = ?`).run(telegramId);
-    }
+    await deleteUserData(telegramId);
 
     await bot.sendMessage(
       chatId,
@@ -102,18 +91,7 @@ export function initBot(): TelegramBot | null {
       premiumUntil.setFullYear(premiumUntil.getFullYear() + 1);
     }
 
-    const existing = db.prepare('SELECT telegram_id FROM users WHERE telegram_id = ?').get(telegramId);
-    if (existing) {
-      db.prepare(`
-        UPDATE users SET is_premium = 1, premium_until = ?, updated_at = datetime('now')
-        WHERE telegram_id = ?
-      `).run(premiumUntil.toISOString(), telegramId);
-    } else {
-      db.prepare(`
-        INSERT INTO users (telegram_id, first_name, is_premium, premium_until)
-        VALUES (?, ?, 1, ?)
-      `).run(telegramId, msg.from?.first_name || '', premiumUntil.toISOString());
-    }
+    await upsertPremiumUser(telegramId, msg.from?.first_name || '', premiumUntil.toISOString());
 
     await bot.sendMessage(
       msg.chat.id,
