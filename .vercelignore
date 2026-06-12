@@ -1,0 +1,6 @@
+backend
+backend-deploy
+backend/data
+*.db
+.env
+.env.*
