@@ -8,6 +8,9 @@ import chatRoutes from './routes/chat.js';
 import recipesRoutes from './routes/recipes.js';
 import progressRoutes from './routes/progress.js';
 import paymentRoutes from './routes/payment.js';
+import homeRoutes from './routes/home.js';
+import subscriptionRoutes from './routes/subscription.js';
+import webhookRoutes from './routes/webhook.js';
 import { initBot } from './bot/index.js';
 import { setBot } from './bot/instance.js';
 import { initDatabase } from './db/store.js';
@@ -22,12 +25,16 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use('/webhook', webhookRoutes);
+
 app.use('/api/user', authMiddleware, userRoutes);
 app.use('/api/plan', authMiddleware, planRoutes);
 app.use('/api/chat', authMiddleware, chatRoutes);
 app.use('/api/recipes', authMiddleware, recipesRoutes);
 app.use('/api/progress', authMiddleware, progressRoutes);
 app.use('/api/payment', authMiddleware, paymentRoutes);
+app.use('/api/home', authMiddleware, homeRoutes);
+app.use('/api/subscription', authMiddleware, subscriptionRoutes);
 
 async function main() {
   await initDatabase();

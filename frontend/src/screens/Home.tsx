@@ -6,35 +6,50 @@ import { WeekPlan, Recipe, Screen } from '../types';
 
 interface Props {
   userName: string;
+  isPremium: boolean;
   onNavigate: (screen: Screen) => void;
   onRecipeSelect: (recipe: Recipe) => void;
-  onShowPremium: () => void;
+  onShowPaywall: () => void;
 }
 
 const DAY_NAMES = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
 
-export function Home({ userName, onNavigate, onRecipeSelect, onShowPremium }: Props) {
+export function Home({ userName, isPremium: isPremiumProp, onNavigate, onRecipeSelect, onShowPaywall }: Props) {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [dayIndex, setDayIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
+  const [isPremium, setIsPremium] = useState(isPremiumProp);
   const [maxDays, setMaxDays] = useState(3);
-  const [canRefresh, setCanRefresh] = useState(false);
+  const [dailyStatus, setDailyStatus] = useState('');
+  const [snackRemaining, setSnackRemaining] = useState(3);
+  const [snackSuggestion, setSnackSuggestion] = useState('');
+  const [snackWarning, setSnackWarning] = useState('');
+  const [snackLoading, setSnackLoading] = useState(false);
   const [error, setError] = useState('');
   const touchStartX = useRef(0);
 
   useEffect(() => {
-    loadPlan();
-    loadRefreshStatus();
+    loadAll();
   }, []);
 
-  const loadPlan = async () => {
+  useEffect(() => {
+    setIsPremium(isPremiumProp);
+  }, [isPremiumProp]);
+
+  const loadAll = async () => {
     try {
-      const data = await api.getPlan();
-      setPlan(data.plan);
-      setIsPremium(data.isPremium);
-      setMaxDays(data.maxDays);
+      const [planData, statusData, snackStatus] = await Promise.all([
+        api.getPlan(),
+        api.getDailyStatus(),
+        api.getWhatToEatStatus(),
+      ]);
+      setPlan(planData.plan);
+      setIsPremium(planData.isPremium);
+      setMaxDays(planData.maxDays);
+      setDailyStatus(statusData.status);
+      if (!planData.isPremium) {
+        setSnackRemaining(snackStatus.remaining);
+      }
     } catch {
       setError('Не удалось загрузить рацион');
     } finally {
@@ -42,41 +57,48 @@ export function Home({ userName, onNavigate, onRecipeSelect, onShowPremium }: Pr
     }
   };
 
-  const loadRefreshStatus = async () => {
-    try {
-      const { canRefresh: cr, isPremium: prem } = await api.getRefreshStatus();
-      setCanRefresh(cr);
-      setIsPremium(prem);
-    } catch { /* ignore */ }
-  };
-
-  const handleRefresh = async () => {
-    if (!isPremium) {
-      onShowPremium();
+  const handleWhatToEat = async () => {
+    if (!isPremium && snackRemaining <= 0) {
+      onShowPaywall();
       return;
     }
-    if (!canRefresh) return;
-    setRefreshing(true);
-    setError('');
+    setSnackLoading(true);
+    setSnackSuggestion('');
+    setSnackWarning('');
     try {
-      const data = await api.generatePlan(true);
+      const data = await api.whatToEat();
+      setSnackSuggestion(data.suggestion);
+      if (data.warning) setSnackWarning(data.warning);
+      if (!data.isPremium) setSnackRemaining(data.remaining);
+    } catch (err: unknown) {
+      const e = err as { error?: string; status?: number };
+      if (e.error === 'premium_required' || e.status === 429) {
+        onShowPaywall();
+      } else {
+        setError('Попробуй через минуту');
+      }
+    } finally {
+      setSnackLoading(false);
+    }
+  };
+
+  const handleReplace = async (dayNumber: number, mealType: string, recipeName: string) => {
+    try {
+      const data = await api.replaceMeal(dayNumber, mealType, recipeName);
       setPlan(data.plan);
-      setMaxDays(data.maxDays);
     } catch (err: unknown) {
       const e = err as { error?: string; status?: number };
       if (e.error === 'premium_required' || e.status === 403) {
-        onShowPremium();
+        onShowPaywall();
       } else {
-        setError(e.error || 'Попробуй через минуту');
+        setError('Не удалось заменить блюдо');
       }
-    } finally {
-      setRefreshing(false);
     }
   };
 
   const tryGoToDay = (index: number) => {
     if (index >= maxDays) {
-      onShowPremium();
+      onShowPaywall();
       return;
     }
     setDayIndex(index);
@@ -123,20 +145,54 @@ export function Home({ userName, onNavigate, onRecipeSelect, onShowPremium }: Pr
   const consumedFat = day.meals.reduce((sum, m) => sum + m.recipe.fat, 0);
 
   return (
-    <div
-      className="screen-content"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{dateStr}, {dayName}</div>
-        <h1 style={{ fontSize: 24, marginTop: 4 }}>Привет, {userName}! 👋</h1>
+    <div className="screen-content" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{dateStr}, {dayName}</div>
+          <h1 style={{ fontSize: 24, marginTop: 4 }}>Привет, {userName}! 👋</h1>
+        </div>
         {!isPremium && (
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6 }}>
-            Бесплатно: {maxDays} дня · Premium: 7 дней ⭐
-          </p>
+          <button
+            onClick={onShowPaywall}
+            style={{
+              background: '#FFB300', color: '#fff', border: 'none', borderRadius: 20,
+              padding: '8px 14px', fontSize: 13, fontWeight: 600, flexShrink: 0,
+            }}
+          >
+            ⭐ Premium
+          </button>
         )}
       </div>
+
+      {dailyStatus && (
+        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>{dailyStatus}</p>
+      )}
+
+      <button
+        onClick={handleWhatToEat}
+        disabled={snackLoading}
+        style={{
+          width: '100%', textAlign: 'left', background: 'white', border: '2px solid var(--primary-light)',
+          borderRadius: 12, padding: '12px 16px', marginBottom: 16, fontSize: 15, cursor: 'pointer',
+        }}
+      >
+        {snackLoading ? '⏳ Думаю...' : '💡 Что мне съесть сейчас?'}
+        {!isPremium && (
+          <span style={{ float: 'right', fontSize: 12, color: 'var(--text-secondary)' }}>
+            Советов осталось: {snackRemaining}/3
+          </span>
+        )}
+      </button>
+
+      {snackWarning && (
+        <p style={{ fontSize: 13, color: '#FF9800', marginBottom: 8 }}>{snackWarning}</p>
+      )}
+
+      {snackSuggestion && (
+        <div className="card" style={{ marginBottom: 16, fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-line' }}>
+          {snackSuggestion}
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
         {Array.from({ length: 7 }, (_, i) => (
@@ -144,12 +200,9 @@ export function Home({ userName, onNavigate, onRecipeSelect, onShowPremium }: Pr
             key={i}
             onClick={() => tryGoToDay(i)}
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
+              width: 8, height: 8, borderRadius: '50%',
               background: i === dayIndex ? 'var(--primary)' : i >= maxDays ? '#E0E0E0' : 'var(--border)',
-              cursor: 'pointer',
-              opacity: i >= maxDays ? 0.5 : 1,
+              cursor: 'pointer', opacity: i >= maxDays ? 0.5 : 1,
             }}
           />
         ))}
@@ -168,27 +221,20 @@ export function Home({ userName, onNavigate, onRecipeSelect, onShowPremium }: Pr
           key={i}
           type={meal.type}
           recipe={meal.recipe}
+          dayNumber={day.dayNumber}
+          isPremium={isPremium}
           onRecipeClick={() => onRecipeSelect(meal.recipe)}
+          onReplace={() => handleReplace(day.dayNumber, meal.type, meal.recipe.name)}
+          onShowPaywall={onShowPaywall}
         />
       ))}
 
       {error && <p className="error-text">{error}</p>}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+      <div style={{ marginTop: 8 }}>
         <button className="btn-primary" onClick={() => onNavigate('chat')}>
           Задать вопрос диетологу 💬
         </button>
-        <button
-          className="btn-secondary"
-          onClick={handleRefresh}
-        >
-          {refreshing ? 'Обновляем...' : isPremium ? 'Обновить рацион 🔄' : 'Обновить рацион ⭐ Premium'}
-        </button>
-        {!isPremium && (
-          <button className="btn-primary" onClick={onShowPremium} style={{ background: '#FFB300' }}>
-            Получить Premium за 299 ⭐
-          </button>
-        )}
       </div>
     </div>
   );

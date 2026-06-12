@@ -1,17 +1,16 @@
 import { Router, Response } from 'express';
-import { getUser, saveOnboarding, parseAllergies, isPremiumUser } from '../db/repository.js';
+import { saveOnboarding, parseAllergies } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { FREEMIUM } from '../config/freemium.js';
+import { resolvePremiumUser } from '../services/premium.js';
 
 const router = Router();
 
 router.get('/me', async (req: AuthRequest, res: Response) => {
-  const user = await getUser(req.telegramId!);
+  const { user, isPremium } = await resolvePremiumUser(req.telegramId!);
   if (!user) {
     return res.json({ exists: false });
   }
-
-  const isPremium = isPremiumUser(user);
 
   res.json({
     exists: true,

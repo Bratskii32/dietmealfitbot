@@ -95,8 +95,136 @@ export function hasConsent(user: UserRow | undefined): boolean {
 
 export function isPremiumUser(user: UserRow | undefined): boolean {
   if (!user?.is_premium) return false;
-  if (user.premium_until && new Date(user.premium_until) < new Date()) return false;
-  return true;
+  if (!user.premium_until) return false;
+  return new Date(user.premium_until) > new Date();
+}
+
+export function getWeekStartMonday(): string {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().split('T')[0];
+}
+
+export async function expirePremium(telegramId: string): Promise<void> {
+  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
+  if (user) {
+    user.is_premium = 0;
+    user.premium_until = undefined;
+    user.updated_at = now();
+    await persist();
+  }
+}
+
+export async function markPremiumExpiryNotified(telegramId: string): Promise<void> {
+  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
+  if (user) {
+    user.premium_expiry_notified = 1;
+    await persist();
+  }
+}
+
+export async function activateProdamusPremium(telegramId: string, days = 30): Promise<string> {
+  const db = getDb();
+  let user = db.data.users.find((u) => u.telegram_id === telegramId);
+  const premiumUntil = new Date();
+  premiumUntil.setDate(premiumUntil.getDate() + days);
+  const untilStr = premiumUntil.toISOString();
+
+  if (user) {
+    user.is_premium = 1;
+    user.premium_until = untilStr;
+    user.premium_expiry_notified = 0;
+    user.updated_at = now();
+  } else {
+    db.data.users.push({
+      telegram_id: telegramId,
+      is_premium: 1,
+      premium_until: untilStr,
+      premium_expiry_notified: 0,
+      created_at: now(),
+      updated_at: now(),
+    });
+  }
+  await persist();
+  return untilStr;
+}
+
+export function getSnackAdviceCount(user: UserRow | undefined): number {
+  return user?.snack_advice_count || 0;
+}
+
+export async function incrementSnackAdvice(telegramId: string): Promise<number> {
+  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
+  if (user) {
+    user.snack_advice_count = (user.snack_advice_count || 0) + 1;
+    user.updated_at = now();
+    await persist();
+    return user.snack_advice_count;
+  }
+  return 0;
+}
+
+export function getWeeklyChatCount(user: UserRow | undefined): number {
+  if (!user) return 0;
+  const weekStart = getWeekStartMonday();
+  if (user.chat_week_start !== weekStart) return 0;
+  return user.chat_week_count || 0;
+}
+
+export async function incrementWeeklyChat(telegramId: string): Promise<number> {
+  const db = getDb();
+  const user = db.data.users.find((u) => u.telegram_id === telegramId);
+  if (!user) return 0;
+  const weekStart = getWeekStartMonday();
+  if (user.chat_week_start !== weekStart) {
+    user.chat_week_start = weekStart;
+    user.chat_week_count = 1;
+  } else {
+    user.chat_week_count = (user.chat_week_count || 0) + 1;
+  }
+  user.updated_at = now();
+  await persist();
+  return user.chat_week_count || 0;
+}
+
+export async function setDailyStatus(telegramId: string, status: string, date: string): Promise<void> {
+  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
+  if (user) {
+    user.daily_status = status;
+    user.daily_status_date = date;
+    await persist();
+  }
+}
+
+export async function setProgressComment(telegramId: string, comment: string, date: string): Promise<void> {
+  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
+  if (user) {
+    user.progress_ai_comment = comment;
+    user.progress_ai_comment_date = date;
+    await persist();
+  }
+}
+
+export async function updateMealInPlan(
+  telegramId: string,
+  dayNumber: number,
+  mealType: string,
+  newRecipe: Record<string, unknown>,
+  reason: string
+): Promise<void> {
+  const planRow = await getLatestPlan(telegramId);
+  if (!planRow) return;
+  const plan = JSON.parse(planRow.plan_data);
+  const day = plan.days?.find((d: { dayNumber: number }) => d.dayNumber === dayNumber);
+  if (!day) return;
+  const meal = day.meals?.find((m: { type: string }) => m.type === mealType);
+  if (!meal) return;
+  meal.recipe = { ...newRecipe, replaceReason: reason };
+  planRow.plan_data = JSON.stringify(plan);
+  await persist();
 }
 
 export async function getLatestPlan(telegramId: string): Promise<WeekPlanRow | undefined> {
@@ -245,6 +373,7 @@ export async function activatePremium(telegramId: string, premiumUntil: string):
   if (user) {
     user.is_premium = 1;
     user.premium_until = premiumUntil;
+    user.premium_expiry_notified = 0;
     user.updated_at = now();
   }
   await persist();

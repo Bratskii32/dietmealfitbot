@@ -7,7 +7,8 @@ import { Chat } from './screens/Chat';
 import { Recipes } from './screens/Recipes';
 import { RecipeDetail } from './screens/RecipeDetail';
 import { Progress } from './screens/Progress';
-import { Premium } from './screens/Premium';
+import { Settings } from './screens/Settings';
+import { Paywall } from './screens/Paywall';
 import { Navigation } from './components/Navigation';
 import { Screen, Recipe } from './types';
 
@@ -19,18 +20,30 @@ export default function App() {
   const [userName, setUserName] = useState('');
   const [screen, setScreen] = useState<Screen>('home');
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-  const [showPremium, setShowPremium] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+  const [premiumExpiresAt, setPremiumExpiresAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isReady) return;
     checkUser();
   }, [isReady]);
 
+  const loadSubscription = async () => {
+    try {
+      const sub = await api.getSubscription();
+      setIsPremium(sub.isPremium);
+      setPremiumExpiresAt(sub.premiumExpiresAt);
+    } catch { /* ignore */ }
+  };
+
   const checkUser = async () => {
     try {
       const data = await api.getUser();
+      await loadSubscription();
       if (data.exists && data.user?.onboardingComplete) {
         setUserName(data.user.name || user?.first_name || 'друг');
+        setIsPremium(data.user.isPremium);
         setAppState('app');
       } else {
         setAppState('onboarding');
@@ -42,15 +55,13 @@ export default function App() {
 
   const handleOnboardingComplete = () => {
     setUserName(user?.first_name || 'друг');
+    loadSubscription();
     setAppState('app');
   };
 
-  const handleRecipeSelect = (recipe: Recipe) => {
-    setSelectedRecipe(recipe);
-  };
-
-  const handleBackFromRecipe = () => {
-    setSelectedRecipe(null);
+  const handleClosePaywall = () => {
+    setShowPaywall(false);
+    loadSubscription();
   };
 
   if (appState === 'loading') {
@@ -75,7 +86,7 @@ export default function App() {
   if (selectedRecipe) {
     return (
       <div className="app-container">
-        <RecipeDetail recipe={selectedRecipe} onBack={handleBackFromRecipe} />
+        <RecipeDetail recipe={selectedRecipe} onBack={() => setSelectedRecipe(null)} />
       </div>
     );
   }
@@ -85,18 +96,32 @@ export default function App() {
       {screen === 'home' && (
         <Home
           userName={userName}
+          isPremium={isPremium}
           onNavigate={setScreen}
-          onRecipeSelect={handleRecipeSelect}
-          onShowPremium={() => setShowPremium(true)}
+          onRecipeSelect={setSelectedRecipe}
+          onShowPaywall={() => setShowPaywall(true)}
         />
       )}
-      {screen === 'chat' && <Chat onShowPremium={() => setShowPremium(true)} />}
-      {screen === 'recipes' && <Recipes onRecipeSelect={handleRecipeSelect} />}
+      {screen === 'chat' && <Chat onShowPaywall={() => setShowPaywall(true)} />}
+      {screen === 'recipes' && <Recipes onRecipeSelect={setSelectedRecipe} />}
       {screen === 'progress' && <Progress />}
+      {screen === 'settings' && (
+        <Settings
+          isPremium={isPremium}
+          premiumExpiresAt={premiumExpiresAt}
+          onShowPaywall={() => setShowPaywall(true)}
+        />
+      )}
 
       <Navigation current={screen} onNavigate={setScreen} />
 
-      {showPremium && <Premium onClose={() => setShowPremium(false)} />}
+      {showPaywall && (
+        <Paywall
+          onClose={handleClosePaywall}
+          isPremium={isPremium}
+          premiumExpiresAt={premiumExpiresAt}
+        />
+      )}
     </div>
   );
 }

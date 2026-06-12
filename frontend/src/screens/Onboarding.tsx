@@ -19,6 +19,7 @@ const ALLERGIES = [
 export function Onboarding({ defaultName, onComplete }: Props) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [celebrating, setCelebrating] = useState(false);
   const [error, setError] = useState('');
 
   const [name, setName] = useState(defaultName);
@@ -58,12 +59,25 @@ export function Onboarding({ defaultName, onComplete }: Props) {
         allergies,
       });
       await api.generatePlan();
-      onComplete();
+      setLoading(false);
+      setCelebrating(true);
+      setTimeout(() => onComplete(), 2000);
     } catch {
       setError('Попробуй через минуту');
       setLoading(false);
     }
   };
+
+  if (celebrating) {
+    return (
+      <div className="spinner-container">
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
+        <h2 style={{ fontSize: 22, textAlign: 'center' }}>
+          Твой персональный рацион готов, {name || 'друг'}!
+        </h2>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

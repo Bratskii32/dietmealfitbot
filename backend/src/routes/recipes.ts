@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
-import { getUser, getLatestPlan, insertCookedRecipe, isPremiumUser } from '../db/repository.js';
+import { getLatestPlan, insertCookedRecipe } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { FREEMIUM } from '../config/freemium.js';
 import { WeekPlan } from '../services/claude.js';
+import { resolvePremiumUser } from '../services/premium.js';
 
 const router = Router();
 
@@ -14,8 +15,7 @@ const MEAL_TYPE_LABELS: Record<string, string> = {
 };
 
 router.get('/', async (req: AuthRequest, res: Response) => {
-  const user = await getUser(req.telegramId!);
-  const isPremium = isPremiumUser(user);
+  const { isPremium } = await resolvePremiumUser(req.telegramId!);
   const maxDays = isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS;
 
   const plan = await getLatestPlan(req.telegramId!);

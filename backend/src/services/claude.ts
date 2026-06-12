@@ -82,6 +82,11 @@ export async function generateMealPlan(profile: UserProfile, days = 7): Promise<
 - Количество приёмов пищи: ${profile.mealsPerDay}
 - Аллергии и исключения: ${allergies}
 
+ОБЯЗАТЕЛЬНОЕ условие по перекусам:
+${profile.mealsPerDay === 4 ? '- Ровно 1 перекус (type: "snack") в каждом дне' : ''}
+${profile.mealsPerDay === 5 ? '- Ровно 2 перекуса (type: "snack") в каждом дне' : ''}
+${profile.mealsPerDay === 3 ? '- Перекусов нет, только завтрак, обед, ужин' : ''}
+
 Требования к рациону:
 1. Рассчитай суточную норму калорий и БЖУ
 2. Составь ${days} разных ${days === 3 ? 'дня' : 'дней'} (не повторяй блюда)
@@ -170,4 +175,61 @@ export async function chatWithDietitian(
     .filter((block) => block.type === 'text')
     .map((block) => block.text)
     .join('');
+}
+
+async function askClaude(prompt: string, maxTokens = 256): Promise<string> {
+  const response = await client.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: maxTokens,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  return response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('')
+    .trim();
+}
+
+export async function generateDailyStatus(
+  goal: string,
+  todayCalories: number,
+  dailyNorm: number
+): Promise<string> {
+  const goalLabel = GOAL_MAP[goal] || goal;
+  return askClaude(
+    `Сгенерируй короткий комментарий максимум 6 слов про питание пользователя. Цель: ${goalLabel}, калорий сегодня: ${todayCalories} из ${dailyNorm}. Примеры стиля: '🔥 Дефицит калорий — идёшь к цели' или '⚠️ Сегодня перебор по жирам'. Только факт, без воды. Только русский язык.`
+  );
+}
+
+export async function suggestWhatToEat(
+  profile: UserProfile,
+  currentHour: number
+): Promise<string> {
+  const profileStr = JSON.stringify(profile, null, 2);
+  return askClaude(
+    `Предложи одно блюдо прямо сейчас. Данные: ${profileStr}, время: ${currentHour}:00. Ответ на русском: название, КБЖУ одной строкой, 1 причина почему подходит. Максимум 3 строки.`,
+    512
+  );
+}
+
+export async function suggestMealReplacement(
+  recipeName: string,
+  allergies: string[],
+  goal: string
+): Promise<{ name: string; calories: number; protein: number; carbs: number; fat: number; reason: string }> {
+  const goalLabel = GOAL_MAP[goal] || goal;
+  const text = await askClaude(
+    `Предложи замену для "${recipeName}". Учти аллергии: ${allergies.join(', ') || 'нет'}, цель: ${goalLabel}. Верни строго JSON без текста до и после: {"name":"...","calories":0,"protein":0,"carbs":0,"fat":0,"reason":"..."}. Только русский язык.`,
+    512
+  );
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('Не удалось распарсить замену');
+  return JSON.parse(match[0]);
+}
+
+export async function generateProgressComment(streakDays: number, goal: string): Promise<string> {
+  const goalLabel = GOAL_MAP[goal] || goal;
+  return askClaude(
+    `Короткий (до 8 слов) комментарий для человека который придерживается плана ${streakDays} дней. Цель: ${goalLabel}. Стиль: поддерживающий, конкретный. Только русский язык.`
+  );
 }

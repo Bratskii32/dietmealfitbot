@@ -5,6 +5,8 @@ export function Progress() {
   const [weightLog, setWeightLog] = useState<{ weight: number; log_date: string }[]>([]);
   const [cookedCount, setCookedCount] = useState(0);
   const [streak, setStreak] = useState(0);
+  const [streakMessage, setStreakMessage] = useState('');
+  const [aiComment, setAiComment] = useState('');
   const [achievements, setAchievements] = useState<{ id: string; title: string; unlocked: boolean }[]>([]);
   const [todayWeight, setTodayWeight] = useState('');
   const [saving, setSaving] = useState(false);
@@ -19,6 +21,8 @@ export function Progress() {
       setWeightLog(data.weightLog);
       setCookedCount(data.cookedCount);
       setStreak(data.streak);
+      setStreakMessage(data.streakMessage);
+      setAiComment(data.aiComment);
       setAchievements(data.achievements);
     } catch { /* ignore */ }
   };
@@ -41,7 +45,12 @@ export function Progress() {
 
   return (
     <div className="screen-content">
-      <h2 style={{ fontSize: 22, marginBottom: 16 }}>Прогресс 📊</h2>
+      <h2 style={{ fontSize: 22, marginBottom: 8 }}>Прогресс 📊</h2>
+
+      <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>{streakMessage}</p>
+      {aiComment && (
+        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>{aiComment}</p>
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 8 }}>Мой вес сегодня · {today}</div>
@@ -126,12 +135,7 @@ function WeightChart({ data }: { data: { weight: number; log_date: string }[] })
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 140 }}>
-      <polyline
-        fill="none"
-        stroke="var(--primary)"
-        strokeWidth="2.5"
-        points={points}
-      />
+      <polyline fill="none" stroke="var(--primary)" strokeWidth="2.5" points={points} />
       {data.map((d, i) => {
         const x = padding + (i / Math.max(data.length - 1, 1)) * (width - 2 * padding);
         const y = height - padding - ((d.weight - minW) / range) * (height - 2 * padding);

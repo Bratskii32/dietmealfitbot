@@ -10,6 +10,7 @@ const NAV_ITEMS: { id: Screen; label: string; icon: string }[] = [
   { id: 'recipes', label: 'Рецепты', icon: '📖' },
   { id: 'chat', label: 'Чат', icon: '💬' },
   { id: 'progress', label: 'Прогресс', icon: '📊' },
+  { id: 'settings', label: 'Ещё', icon: '⚙️' },
 ];
 
 export function Navigation({ current, onNavigate }: Props) {
@@ -42,8 +43,8 @@ export function Navigation({ current, onNavigate }: Props) {
             color: current === item.id ? 'var(--primary)' : 'var(--text-secondary)',
           }}
         >
-          <span style={{ fontSize: 20 }}>{item.icon}</span>
-          <span style={{ fontSize: 11, fontWeight: current === item.id ? 600 : 400 }}>{item.label}</span>
+          <span style={{ fontSize: 18 }}>{item.icon}</span>
+          <span style={{ fontSize: 10, fontWeight: current === item.id ? 600 : 400 }}>{item.label}</span>
         </button>
       ))}
     </nav>

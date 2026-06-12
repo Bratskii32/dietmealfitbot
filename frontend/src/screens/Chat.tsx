@@ -3,7 +3,7 @@ import { api } from '../api/client';
 import { ChatMessage } from '../types';
 
 interface Props {
-  onShowPremium: () => void;
+  onShowPaywall: () => void;
 }
 
 const QUICK_QUESTIONS = [
@@ -13,11 +13,12 @@ const QUICK_QUESTIONS = [
   'Составь список покупок',
 ];
 
-export function Chat({ onShowPremium }: Props) {
+export function Chat({ onShowPaywall }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [remaining, setRemaining] = useState(3);
   const [limit, setLimit] = useState(3);
+  const [weeklyUsed, setWeeklyUsed] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -37,6 +38,7 @@ export function Chat({ onShowPremium }: Props) {
       setMessages(data.messages);
       setRemaining(data.remaining);
       setLimit(data.limit);
+      setWeeklyUsed(data.weeklyUsed);
       setIsPremium(data.isPremium);
     } catch { /* ignore */ }
   };
@@ -45,7 +47,7 @@ export function Chat({ onShowPremium }: Props) {
     if (!text.trim() || loading) return;
 
     if (!isPremium && remaining <= 0) {
-      onShowPremium();
+      onShowPaywall();
       return;
     }
 
@@ -58,11 +60,12 @@ export function Chat({ onShowPremium }: Props) {
       const data = await api.sendMessage(text);
       setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
       setRemaining(data.remaining);
+      setWeeklyUsed(data.weeklyUsed);
       setIsPremium(data.isPremium);
     } catch (err: unknown) {
       const e = err as { status?: number; error?: string };
       if (e.status === 429 || e.error === 'premium_required') {
-        onShowPremium();
+        onShowPaywall();
       } else {
         setError(e.error || 'Попробуй через минуту');
       }
@@ -78,7 +81,7 @@ export function Chat({ onShowPremium }: Props) {
         <h2 style={{ fontSize: 18 }}>AI-диетолог 💬</h2>
         {!isPremium && (
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
-            Осталось бесплатных запросов: {remaining}/{limit}
+            Запросов в чате на этой неделе: {weeklyUsed}/{limit}
           </p>
         )}
         {isPremium && (
@@ -151,13 +154,8 @@ export function Chat({ onShowPremium }: Props) {
             onClick={() => sendMessage(input)}
             disabled={loading || !input.trim()}
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: '50%',
-              background: 'var(--primary)',
-              color: 'white',
-              fontSize: 18,
-              flexShrink: 0,
+              width: 44, height: 44, borderRadius: '50%',
+              background: 'var(--primary)', color: 'white', fontSize: 18, flexShrink: 0,
             }}
           >
             ➤

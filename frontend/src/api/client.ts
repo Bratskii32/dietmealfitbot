@@ -40,7 +40,26 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ upgrade }) }
     ),
 
+  replaceMeal: (dayNumber: number, mealType: string, recipeName: string) =>
+    request<{ plan: import('../types').WeekPlan; meal: import('../types').Recipe; reason: string }>(
+      '/plan/replace',
+      { method: 'POST', body: JSON.stringify({ dayNumber, mealType, recipeName }) }
+    ),
+
   getRefreshStatus: () => request<{ canRefresh: boolean; isPremium: boolean; maxDays: number }>('/plan/refresh-status'),
+
+  getDailyStatus: () => request<{ status: string }>('/home/status'),
+
+  getWhatToEatStatus: () =>
+    request<{ isPremium: boolean; used: number; limit: number; remaining: number }>('/home/what-to-eat/status'),
+
+  whatToEat: () =>
+    request<{ suggestion: string; used: number; limit: number; remaining: number; warning?: string; isPremium: boolean }>(
+      '/home/what-to-eat',
+      { method: 'POST' }
+    ),
+
+  getSubscription: () => request<import('../types').SubscriptionStatus>('/subscription/status'),
 
   getChatMessages: () =>
     request<{
@@ -48,6 +67,7 @@ export const api = {
       remaining: number;
       limit: number;
       isPremium: boolean;
+      weeklyUsed: number;
     }>('/chat/messages'),
 
   sendMessage: (message: string) =>
@@ -56,6 +76,7 @@ export const api = {
       remaining: number;
       limit: number;
       isPremium: boolean;
+      weeklyUsed: number;
     }>('/chat/send', { method: 'POST', body: JSON.stringify({ message }) }),
 
   getRecipes: () => request<{ recipes: import('../types').RecipeListItem[] }>('/recipes'),
@@ -68,19 +89,13 @@ export const api = {
       weightLog: { weight: number; log_date: string }[];
       cookedCount: number;
       streak: number;
+      streakMessage: string;
+      aiComment: string;
       achievements: { id: string; title: string; unlocked: boolean }[];
     }>('/progress'),
 
   saveWeight: (weight: number) =>
     request('/progress/weight', { method: 'POST', body: JSON.stringify({ weight }) }),
-
-  getPrices: () => request<{ prices: { monthly: number; yearly: number } }>('/payment/prices'),
-
-  createInvoice: (plan: 'monthly' | 'yearly') =>
-    request<{ invoiceLink: string }>('/payment/invoice', {
-      method: 'POST',
-      body: JSON.stringify({ plan }),
-    }),
 };
 
 declare global {
@@ -90,21 +105,8 @@ declare global {
         initData: string;
         ready: () => void;
         expand: () => void;
-        openInvoice: (url: string, callback?: (status: string) => void) => void;
+        openLink: (url: string) => void;
         close: () => void;
-        MainButton: {
-          text: string;
-          show: () => void;
-          hide: () => void;
-          onClick: (cb: () => void) => void;
-          offClick: (cb: () => void) => void;
-        };
-        BackButton: {
-          show: () => void;
-          hide: () => void;
-          onClick: (cb: () => void) => void;
-          offClick: (cb: () => void) => void;
-        };
         initDataUnsafe: {
           user?: { id: number; first_name?: string; last_name?: string; username?: string };
         };

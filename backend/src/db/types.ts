@@ -14,6 +14,14 @@ export interface UserRow {
   allergies?: string[];
   is_premium?: number;
   premium_until?: string;
+  premium_expiry_notified?: number;
+  snack_advice_count?: number;
+  chat_week_count?: number;
+  chat_week_start?: string;
+  daily_status?: string;
+  daily_status_date?: string;
+  progress_ai_comment?: string;
+  progress_ai_comment_date?: string;
   onboarding_complete?: number;
   consent_accepted?: number;
   pdf_gift_sent?: number;

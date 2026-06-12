@@ -11,6 +11,7 @@ export interface User {
   allergies: string[];
   isPremium: boolean;
   onboardingComplete: boolean;
+  maxDays?: number;
 }
 
 export interface Recipe {
@@ -24,6 +25,7 @@ export interface Recipe {
   carbs: number;
   fat: number;
   servings: number;
+  replaceReason?: string;
 }
 
 export interface Meal {
@@ -60,4 +62,10 @@ export interface RecipeListItem {
   recipe: Recipe;
 }
 
-export type Screen = 'home' | 'chat' | 'recipes' | 'progress';
+export type Screen = 'home' | 'chat' | 'recipes' | 'progress' | 'settings';
+
+export interface SubscriptionStatus {
+  isPremium: boolean;
+  premiumExpiresAt: string | null;
+  daysLeft: number;
+}

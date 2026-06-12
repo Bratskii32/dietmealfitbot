@@ -1,17 +1,11 @@
 import TelegramBot from 'node-telegram-bot-api';
 import {
   deleteUserData,
-  upsertPremiumUser,
   getUser,
   acceptConsent,
-  markPdfGiftSent,
   hasConsent,
-  getLatestPlan,
 } from '../db/repository.js';
-import { generateMenuPdfBuffer } from '../services/pdf.js';
-import { SAMPLE_3_DAY_MENU, getSample7DayMenu } from '../services/sampleMenu.js';
-import { WeekPlan } from '../services/claude.js';
-import { prices } from '../routes/payment.js';
+import { PRODAMUS_PAY_URL } from '../config/freemium.js';
 
 const PRIVACY_POLICY = `📄 Политика конфиденциальности @dietmealfitbot
 
@@ -39,63 +33,29 @@ const START_MESSAGE = `Привет! Я AI-диетолог 🥗
 
 ⚕️ Дисклеймер: бот не является медицинским устройством и не заменяет консультацию врача.`;
 
-const WELCOME_BACK_MESSAGE = `С возвращением! 👋
+const HOW_IT_WORKS = `Вводишь параметры → AI составляет меню с рецептами и КБЖУ.
 
-Твой персональный AI-диетолог готов помочь.
-Открой приложение, чтобы посмотреть рацион или задать вопрос.`;
+Бесплатно: меню 3 дня + 3 совета + 3 вопроса в неделю
+Premium: 7 дней + безлимит + замена блюд — 299₽/мес`;
 
-const GIFT_MESSAGE = `🎁 Твой подарок — меню на 3 дня в PDF!
+const HELP_MESSAGE = `ℹ️ Помощь @dietmealfitbot
 
-Бесплатно: меню на 3 дня и 3 вопроса диетологу в день.
-Premium (299 ⭐/мес): полный рацион на 7 дней, безлимитный чат и обновление меню.`;
+/start — начать работу
+/app — открыть приложение
+/delete — удалить все данные
 
-function openAppKeyboard(frontendUrl: string) {
-  return {
-    inline_keyboard: [
-      [{ text: '📱 Открыть приложение', web_app: { url: frontendUrl } }],
-      [{ text: '📄 Политика конфиденциальности', callback_data: 'privacy' }],
-    ],
-  };
-}
+Поддержка: @dietmealfitbot
+Premium: ${PRODAMUS_PAY_URL}`;
 
-function giftKeyboard(frontendUrl: string) {
-  return {
-    inline_keyboard: [
-      [{ text: '🚀 Хочу полный рацион', web_app: { url: frontendUrl } }],
-      [{ text: '📄 Хочу PDF на неделю', callback_data: 'buy_pdf_week' }],
-    ],
-  };
-}
-
-async function getMenuForPdf(telegramId: string, days: 3 | 7): Promise<WeekPlan> {
-  const planRow = await getLatestPlan(telegramId);
-  if (planRow) {
-    const plan = JSON.parse(planRow.plan_data) as WeekPlan;
-    return { ...plan, days: plan.days.slice(0, days) };
+function appKeyboard(frontendUrl: string, withHow = false) {
+  const rows: TelegramBot.InlineKeyboardButton[][] = [
+    [{ text: '🥗 Открыть приложение', web_app: { url: frontendUrl } }],
+  ];
+  if (withHow) {
+    rows.push([{ text: '❓ Как это работает', callback_data: 'how_it_works' }]);
   }
-  return days === 3 ? SAMPLE_3_DAY_MENU : getSample7DayMenu();
-}
-
-async function sendGiftPdf(bot: TelegramBot, chatId: number, telegramId: string) {
-  const menu = await getMenuForPdf(telegramId, 3);
-  const pdf = await generateMenuPdfBuffer(menu, 'Меню на 3 дня — @dietmealfitbot');
-  await bot.sendDocument(chatId, pdf, {
-    caption: '🎁 Подарок: меню на 3 дня',
-  }, {
-    filename: 'menu-3-dnya.pdf',
-    contentType: 'application/pdf',
-  });
-}
-
-async function sendWeekPdf(bot: TelegramBot, chatId: number, telegramId: string) {
-  const menu = await getMenuForPdf(telegramId, 7);
-  const pdf = await generateMenuPdfBuffer(menu, 'Меню на 7 дней — @dietmealfitbot');
-  await bot.sendDocument(chatId, pdf, {
-    caption: '📄 Твоё меню на неделю',
-  }, {
-    filename: 'menu-nedelya.pdf',
-    contentType: 'application/pdf',
-  });
+  rows.push([{ text: '📄 Политика конфиденциальности', callback_data: 'privacy' }]);
+  return { inline_keyboard: rows };
 }
 
 export function initBot(): TelegramBot | null {
@@ -108,14 +68,21 @@ export function initBot(): TelegramBot | null {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   const bot = new TelegramBot(token, { polling: true });
 
+  bot.setMyCommands([
+    { command: 'start', description: 'Начать' },
+    { command: 'app', description: 'Открыть приложение' },
+    { command: 'help', description: 'Помощь и поддержка' },
+  ]).catch(() => {});
+
   bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
     const telegramId = String(msg.from?.id);
     const user = await getUser(telegramId);
+    const name = user?.name || user?.first_name || msg.from?.first_name || 'друг';
 
     if (hasConsent(user)) {
-      await bot.sendMessage(chatId, WELCOME_BACK_MESSAGE, {
-        reply_markup: openAppKeyboard(frontendUrl),
+      await bot.sendMessage(chatId, `С возвращением, ${name}! 👋`, {
+        reply_markup: appKeyboard(frontendUrl),
       });
       return;
     }
@@ -130,10 +97,21 @@ export function initBot(): TelegramBot | null {
     });
   });
 
+  bot.onText(/\/app/, async (msg) => {
+    await bot.sendMessage(msg.chat.id, '🥗 Открываю приложение:', {
+      reply_markup: appKeyboard(process.env.FRONTEND_URL || 'http://localhost:5173'),
+    });
+  });
+
+  bot.onText(/\/help/, async (msg) => {
+    await bot.sendMessage(msg.chat.id, HELP_MESSAGE);
+  });
+
   bot.on('callback_query', async (query) => {
     if (!query.message || !query.from) return;
     const chatId = query.message.chat.id;
     const telegramId = String(query.from.id);
+    const name = query.from.first_name || 'друг';
 
     if (query.data === 'privacy') {
       await bot.answerCallbackQuery(query.id);
@@ -141,111 +119,35 @@ export function initBot(): TelegramBot | null {
       return;
     }
 
-    if (query.data === 'accept_start') {
+    if (query.data === 'how_it_works') {
       await bot.answerCallbackQuery(query.id);
-      const isFirstAccept = await acceptConsent(telegramId, query.from.first_name);
-      const user = await getUser(telegramId);
-
-      if (isFirstAccept && !user?.pdf_gift_sent) {
-        try {
-          await sendGiftPdf(bot, chatId, telegramId);
-          await markPdfGiftSent(telegramId);
-        } catch (err) {
-          console.error('PDF gift error:', err);
-        }
-        await bot.sendMessage(chatId, GIFT_MESSAGE, {
-          reply_markup: giftKeyboard(frontendUrl),
-        });
-      }
-
-      await bot.sendMessage(chatId, 'Готово! Открой приложение 👇', {
-        reply_markup: openAppKeyboard(frontendUrl),
+      await bot.sendMessage(chatId, HOW_IT_WORKS, {
+        reply_markup: appKeyboard(frontendUrl),
       });
       return;
     }
 
-    if (query.data === 'buy_pdf_week') {
+    if (query.data === 'accept_start') {
       await bot.answerCallbackQuery(query.id);
-      const title = 'PDF меню на 7 дней';
-      const description = 'Полное меню на неделю в PDF-формате';
-      await bot.sendInvoice(chatId, title, description, 'pdf_weekly', '', 'XTR', [
-        { label: title, amount: prices.pdf_weekly },
-      ]);
-      return;
+      await acceptConsent(telegramId, query.from.first_name);
+
+      await bot.sendMessage(
+        chatId,
+        `Отлично, ${name}! 👋\n\nОткрой приложение и введи данные — составлю персональный рацион за 1 минуту.`,
+        { reply_markup: appKeyboard(frontendUrl, true) }
+      );
     }
   });
 
   bot.onText(/\/delete/, async (msg) => {
     const chatId = msg.chat.id;
     const telegramId = String(msg.from?.id);
-
     if (!telegramId) return;
 
     await deleteUserData(telegramId);
-
-    await bot.sendMessage(
-      chatId,
-      '✅ Все твои данные удалены. Если захочешь вернуться — напиши /start'
-    );
-  });
-
-  bot.on('pre_checkout_query', async (query) => {
-    await bot.answerPreCheckoutQuery(query.id, true);
-  });
-
-  bot.on('successful_payment', async (msg) => {
-    const telegramId = String(msg.from?.id);
-    const payload = msg.successful_payment?.invoice_payload;
-
-    if (!telegramId || !payload) return;
-
-    if (payload === 'pdf_weekly') {
-      try {
-        await sendWeekPdf(bot, msg.chat.id, telegramId);
-        await bot.sendMessage(msg.chat.id, '✅ PDF на неделю отправлен!');
-      } catch (err) {
-        console.error('Week PDF error:', err);
-        await bot.sendMessage(msg.chat.id, 'Не удалось отправить PDF. Напиши /start');
-      }
-      return;
-    }
-
-    const plan = payload as 'monthly' | 'yearly';
-    const now = new Date();
-    const premiumUntil = new Date(now);
-
-    if (plan === 'monthly') {
-      premiumUntil.setMonth(premiumUntil.getMonth() + 1);
-    } else {
-      premiumUntil.setFullYear(premiumUntil.getFullYear() + 1);
-    }
-
-    await upsertPremiumUser(telegramId, msg.from?.first_name || '', premiumUntil.toISOString());
-
-    await bot.sendMessage(
-      msg.chat.id,
-      '🎉 Premium активирован!\n\n✅ Меню на 7 дней\n✅ Безлимитный чат\n✅ Обновление рациона\n\nОткрой приложение 👇',
-      { reply_markup: openAppKeyboard(process.env.FRONTEND_URL || 'http://localhost:5173') }
-    );
+    await bot.sendMessage(chatId, '✅ Все твои данные удалены. Если захочешь вернуться — напиши /start');
   });
 
   console.log('Telegram бот запущен');
   return bot;
-}
-
-export async function sendStarsInvoice(
-  bot: TelegramBot,
-  chatId: number,
-  plan: 'monthly' | 'yearly'
-) {
-  const amount = prices[plan];
-  const title = plan === 'monthly' ? 'Premium на 1 месяц' : 'Premium на 1 год';
-  const description =
-    plan === 'monthly'
-      ? 'Меню на 7 дней, безлимитный чат, обновление рациона'
-      : 'Premium на 1 год (скидка 30%)';
-
-  await bot.sendInvoice(chatId, title, description, plan, '', 'XTR', [
-    { label: title, amount },
-  ]);
 }
