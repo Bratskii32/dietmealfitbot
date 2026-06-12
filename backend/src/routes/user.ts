@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
-import { getUser, saveOnboarding, parseAllergies } from '../db/repository.js';
+import { getUser, saveOnboarding, parseAllergies, isPremiumUser } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { FREEMIUM } from '../config/freemium.js';
 
 const router = Router();
 
@@ -9,6 +10,8 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
   if (!user) {
     return res.json({ exists: false });
   }
+
+  const isPremium = isPremiumUser(user);
 
   res.json({
     exists: true,
@@ -23,8 +26,9 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
       activityLevel: user.activity_level,
       mealsPerDay: user.meals_per_day,
       allergies: parseAllergies(user),
-      isPremium: !!user.is_premium,
+      isPremium,
       onboardingComplete: !!user.onboarding_complete,
+      maxDays: isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS,
     },
   });
 });

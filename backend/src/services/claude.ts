@@ -66,12 +66,12 @@ const ALLERGY_MAP: Record<string, string> = {
   none: 'Нет ограничений',
 };
 
-export async function generateMealPlan(profile: UserProfile): Promise<WeekPlan> {
+export async function generateMealPlan(profile: UserProfile, days = 7): Promise<WeekPlan> {
   const allergies = (profile.allergies || [])
     .map((a) => ALLERGY_MAP[a] || a)
     .join(', ') || 'Нет';
 
-  const prompt = `Ты — профессиональный диетолог. Составь индивидуальный рацион питания на 7 дней.
+  const prompt = `Ты — профессиональный диетолог. Составь индивидуальный рацион питания на ${days} ${days === 3 ? 'дня' : 'дней'}.
 Отвечай строго на русском языке.
 
 Данные пользователя:
@@ -84,7 +84,7 @@ export async function generateMealPlan(profile: UserProfile): Promise<WeekPlan> 
 
 Требования к рациону:
 1. Рассчитай суточную норму калорий и БЖУ
-2. Составь 7 разных дней (не повторяй блюда)
+2. Составь ${days} разных ${days === 3 ? 'дня' : 'дней'} (не повторяй блюда)
 3. Используй доступные в России продукты
 4. Каждый рецепт: название по-русски, ингредиенты с граммами, пошаговая инструкция, КБЖУ
 5. Ответ строго в формате JSON (без лишнего текста до и после JSON)

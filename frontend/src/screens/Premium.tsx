@@ -35,17 +35,25 @@ export function Premium({ onClose }: Props) {
       }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>⭐</div>
-          <h2 style={{ fontSize: 22, marginBottom: 8 }}>Premium</h2>
+          <h2 style={{ fontSize: 22, marginBottom: 8 }}>Получи Premium за 299 ⭐</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.5 }}>
-            Получи безлимитные консультации AI-диетолога
+            Разблокируй все возможности AI-диетолога
           </p>
+        </div>
+
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 14, lineHeight: 1.8 }}>
+            <div>✅ Меню на <b>7 дней</b> (бесплатно — 3)</div>
+            <div>✅ <b>Безлимитный</b> чат с AI (бесплатно — 3/день)</div>
+            <div>✅ <b>Обновление</b> рациона в любое время</div>
+          </div>
         </div>
 
         <div className="card" style={{ marginBottom: 12, cursor: 'pointer' }} onClick={() => handlePurchase('monthly')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontWeight: 600, fontSize: 16 }}>1 месяц</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Безлимитные запросы</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Все функции Premium</div>
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--primary)' }}>
               {prices.monthly} ⭐
@@ -57,7 +65,7 @@ export function Premium({ onClose }: Props) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontWeight: 600, fontSize: 16 }}>1 год <span style={{ color: 'var(--primary)', fontSize: 13 }}>-30%</span></div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Безлимитные запросы</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Все функции Premium</div>
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--primary)' }}>
               {prices.yearly} ⭐

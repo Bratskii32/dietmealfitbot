@@ -57,6 +57,48 @@ export async function saveOnboarding(
   await persist();
 }
 
+export async function acceptConsent(telegramId: string, firstName?: string): Promise<boolean> {
+  const db = getDb();
+  let user = db.data.users.find((u) => u.telegram_id === telegramId);
+  const isFirstAccept = !user?.consent_accepted;
+  const timestamp = now();
+
+  if (user) {
+    user.consent_accepted = 1;
+    user.updated_at = timestamp;
+    if (firstName && !user.first_name) user.first_name = firstName;
+  } else {
+    db.data.users.push({
+      telegram_id: telegramId,
+      first_name: firstName,
+      consent_accepted: 1,
+      created_at: timestamp,
+      updated_at: timestamp,
+    });
+  }
+  await persist();
+  return isFirstAccept;
+}
+
+export async function markPdfGiftSent(telegramId: string): Promise<void> {
+  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
+  if (user) {
+    user.pdf_gift_sent = 1;
+    user.updated_at = now();
+    await persist();
+  }
+}
+
+export function hasConsent(user: UserRow | undefined): boolean {
+  return !!user?.consent_accepted;
+}
+
+export function isPremiumUser(user: UserRow | undefined): boolean {
+  if (!user?.is_premium) return false;
+  if (user.premium_until && new Date(user.premium_until) < new Date()) return false;
+  return true;
+}
+
 export async function getLatestPlan(telegramId: string): Promise<WeekPlanRow | undefined> {
   const plans = getDb().data.week_plans
     .filter((p) => p.telegram_id === telegramId)

@@ -87,6 +87,7 @@ export default function App() {
           userName={userName}
           onNavigate={setScreen}
           onRecipeSelect={handleRecipeSelect}
+          onShowPremium={() => setShowPremium(true)}
         />
       )}
       {screen === 'chat' && <Chat onShowPremium={() => setShowPremium(true)} />}

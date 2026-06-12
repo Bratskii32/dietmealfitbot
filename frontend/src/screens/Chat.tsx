@@ -61,7 +61,7 @@ export function Chat({ onShowPremium }: Props) {
       setIsPremium(data.isPremium);
     } catch (err: unknown) {
       const e = err as { status?: number; error?: string };
-      if (e.status === 429) {
+      if (e.status === 429 || e.error === 'premium_required') {
         onShowPremium();
       } else {
         setError(e.error || 'Попробуй через минуту');

@@ -15,6 +15,8 @@ export interface UserRow {
   is_premium?: number;
   premium_until?: string;
   onboarding_complete?: number;
+  consent_accepted?: number;
+  pdf_gift_sent?: number;
   last_plan_refresh?: string;
   created_at?: string;
   updated_at?: string;

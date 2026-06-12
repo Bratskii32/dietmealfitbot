@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
-import { getLatestPlan, insertCookedRecipe } from '../db/repository.js';
+import { getUser, getLatestPlan, insertCookedRecipe, isPremiumUser } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { FREEMIUM } from '../config/freemium.js';
+import { WeekPlan } from '../services/claude.js';
 
 const router = Router();
 
@@ -12,13 +14,18 @@ const MEAL_TYPE_LABELS: Record<string, string> = {
 };
 
 router.get('/', async (req: AuthRequest, res: Response) => {
+  const user = await getUser(req.telegramId!);
+  const isPremium = isPremiumUser(user);
+  const maxDays = isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS;
+
   const plan = await getLatestPlan(req.telegramId!);
 
   if (!plan) {
-    return res.json({ recipes: [] });
+    return res.json({ recipes: [], isPremium, maxDays });
   }
 
-  const planData = JSON.parse(plan.plan_data);
+  const planData = JSON.parse(plan.plan_data) as WeekPlan;
+  const visibleDays = planData.days.slice(0, maxDays);
   const recipes: {
     name: string;
     type: string;
@@ -29,7 +36,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     recipe: unknown;
   }[] = [];
 
-  for (const day of planData.days || []) {
+  for (const day of visibleDays) {
     for (const meal of day.meals || []) {
       recipes.push({
         name: meal.recipe.name,
@@ -43,7 +50,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     }
   }
 
-  res.json({ recipes });
+  res.json({ recipes, isPremium, maxDays });
 });
 
 router.post('/cooked', async (req: AuthRequest, res: Response) => {

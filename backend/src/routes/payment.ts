@@ -8,6 +8,7 @@ const router = Router();
 export const prices = {
   monthly: 299,
   yearly: 2490,
+  pdf_weekly: 149,
 };
 
 router.get('/prices', (_req, res: Response) => {
@@ -29,8 +30,8 @@ router.post('/invoice', async (req: AuthRequest, res: Response) => {
   const title = plan === 'monthly' ? 'Premium на 1 месяц' : 'Premium на 1 год';
   const description =
     plan === 'monthly'
-      ? 'Безлимитные консультации AI-диетолога на 30 дней'
-      : 'Безлимитные консультации AI-диетолога на 1 год (скидка 30%)';
+      ? 'Меню на 7 дней, безлимитный чат, обновление рациона'
+      : 'Premium на 1 год — меню на 7 дней и безлимитный чат';
 
   try {
     const link = await bot.createInvoiceLink(

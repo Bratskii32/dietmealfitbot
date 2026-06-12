@@ -27,14 +27,20 @@ export const api = {
   saveOnboarding: (data: Record<string, unknown>) =>
     request('/user/onboarding', { method: 'POST', body: JSON.stringify(data) }),
 
-  getPlan: () => request<{ plan: import('../types').WeekPlan | null }>('/plan'),
+  getPlan: () => request<{
+    plan: import('../types').WeekPlan | null;
+    isPremium: boolean;
+    maxDays: number;
+    totalDays?: number;
+  }>('/plan'),
 
-  generatePlan: () =>
-    request<{ plan: import('../types').WeekPlan; canRefresh: boolean }>('/plan/generate', {
-      method: 'POST',
-    }),
+  generatePlan: (upgrade = false) =>
+    request<{ plan: import('../types').WeekPlan; canRefresh: boolean; isPremium: boolean; maxDays: number }>(
+      '/plan/generate',
+      { method: 'POST', body: JSON.stringify({ upgrade }) }
+    ),
 
-  getRefreshStatus: () => request<{ canRefresh: boolean; isPremium: boolean }>('/plan/refresh-status'),
+  getRefreshStatus: () => request<{ canRefresh: boolean; isPremium: boolean; maxDays: number }>('/plan/refresh-status'),
 
   getChatMessages: () =>
     request<{
