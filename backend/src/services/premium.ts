@@ -5,7 +5,6 @@ import {
   markPremiumExpiryNotified,
 } from '../db/repository.js';
 import { getBot } from '../bot/instance.js';
-import { PRODAMUS_PAY_URL } from '../config/freemium.js';
 
 export function isPremiumActive(user: UserRow | undefined): boolean {
   if (!user?.is_premium) return false;
@@ -63,12 +62,13 @@ export async function notifyPremiumActivated(telegramId: string, expiresAt: stri
 export async function notifyPremiumExpired(telegramId: string) {
   const bot = getBot();
   if (!bot) return;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   await bot.sendMessage(
     Number(telegramId),
     '⚠️ Твоя подписка Premium истекла.\nПродли, чтобы сохранить доступ к полному рациону.',
     {
       reply_markup: {
-        inline_keyboard: [[{ text: 'Продлить подписку', url: PRODAMUS_PAY_URL }]],
+        inline_keyboard: [[{ text: '⭐ Продлить подписку', web_app: { url: frontendUrl } }]],
       },
     }
   );

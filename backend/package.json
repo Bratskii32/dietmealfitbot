@@ -10,12 +10,13 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "cors": "^2.8.5",
-    "lowdb": "^7.0.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "lowdb": "^7.0.1",
     "node-telegram-bot-api": "^0.66.0",
     "pdfmake": "^0.2.18",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "yookassa": "^0.1.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

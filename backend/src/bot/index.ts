@@ -5,7 +5,6 @@ import {
   acceptConsent,
   hasConsent,
 } from '../db/repository.js';
-import { PRODAMUS_PAY_URL } from '../config/freemium.js';
 
 const PRIVACY_POLICY = `📄 Политика конфиденциальности @dietmealfitbot
 
@@ -45,7 +44,7 @@ const HELP_MESSAGE = `ℹ️ Помощь @dietmealfitbot
 /delete — удалить все данные
 
 Поддержка: @dietmealfitbot
-Premium: ${PRODAMUS_PAY_URL}`;
+Premium: открой приложение → ⭐ Premium (299₽/мес)`;
 
 function appKeyboard(frontendUrl: string, withHow = false) {
   const rows: TelegramBot.InlineKeyboardButton[][] = [

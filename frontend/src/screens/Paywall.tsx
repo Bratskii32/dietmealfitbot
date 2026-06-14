@@ -1,6 +1,6 @@
+import { useState } from 'react';
 import WebApp from '@twa-dev/sdk';
-
-const PRODAMUS_URL = import.meta.env.VITE_PRODAMUS_URL || 'https://prodamus.ru/ЗАМЕНИ';
+import { api } from '../api/client';
 
 interface Props {
   onClose: () => void;
@@ -9,8 +9,20 @@ interface Props {
 }
 
 export function Paywall({ onClose, isPremium, premiumExpiresAt }: Props) {
-  const openPayment = () => {
-    WebApp.openLink(PRODAMUS_URL);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const openPayment = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { paymentUrl } = await api.createPayment();
+      WebApp.openLink(paymentUrl);
+    } catch {
+      setError('Не удалось открыть оплату. Попробуйте позже.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const expiresLabel = premiumExpiresAt
@@ -34,7 +46,12 @@ export function Paywall({ onClose, isPremium, premiumExpiresAt }: Props) {
               до {expiresLabel}
             </p>
           </div>
-          <button className="btn-primary" onClick={openPayment}>Продлить подписку</button>
+          {error && (
+            <p style={{ color: '#e53935', fontSize: 14, textAlign: 'center', marginBottom: 12 }}>{error}</p>
+          )}
+          <button className="btn-primary" onClick={openPayment} disabled={loading}>
+            {loading ? 'Загрузка...' : 'Продлить подписку'}
+          </button>
           <button className="btn-secondary" style={{ marginTop: 10 }} onClick={onClose}>Закрыть</button>
         </div>
       </div>
@@ -65,9 +82,14 @@ export function Paywall({ onClose, isPremium, premiumExpiresAt }: Props) {
           <div>✓ Адаптация под тренировки</div>
         </div>
 
-        <button className="btn-primary" onClick={openPayment}>Открыть доступ</button>
+        {error && (
+          <p style={{ color: '#e53935', fontSize: 14, textAlign: 'center', marginBottom: 12 }}>{error}</p>
+        )}
+        <button className="btn-primary" onClick={openPayment} disabled={loading}>
+          {loading ? 'Загрузка...' : 'Открыть доступ'}
+        </button>
         <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-secondary)', marginTop: 12 }}>
-          Отменить можно в любой момент
+          Оплата через ЮKassa · отменить можно в любой момент
         </p>
         <button className="btn-secondary" style={{ marginTop: 10 }} onClick={onClose}>Позже</button>
       </div>

@@ -1,70 +1,44 @@
 import { Router, Request, Response } from 'express';
-import {
-  activateProdamusPremium,
-  expirePremium,
-  getUser,
-} from '../db/repository.js';
-import {
-  notifyPremiumActivated,
-  notifyPremiumCancelled,
-} from '../services/premium.js';
+import { activateProdamusPremium } from '../db/repository.js';
+import { notifyPremiumActivated } from '../services/premium.js';
 import { PREMIUM_DAYS_DURATION } from '../config/freemium.js';
+import { isTrustedYooKassaRequest, verifyYooKassaPayment } from '../services/yookassa.js';
 
 const router = Router();
 
-function extractTelegramId(body: Record<string, unknown>): string | null {
-  const candidates = [
-    body.telegram_id,
-    body.telegramId,
-    body.customer_extra,
-    body.customerExtra,
-    (body.customer as Record<string, unknown>)?.extra,
-    (body.order as Record<string, unknown>)?.customer_extra,
-  ];
-  for (const c of candidates) {
-    if (c != null && String(c).trim()) return String(c).trim();
+router.post('/yookassa', async (req: Request, res: Response) => {
+  if (!isTrustedYooKassaRequest(req)) {
+    console.warn('YooKassa webhook: недоверенный IP', req.headers['x-forwarded-for'] || req.socket.remoteAddress);
+    return res.status(403).json({ error: 'Forbidden' });
   }
-  return null;
-}
 
-function isSuccessPayment(body: Record<string, unknown>): boolean {
-  const status = String(body.payment_status || body.status || body.order_status || '').toLowerCase();
-  return ['success', 'paid', 'completed', 'done'].includes(status);
-}
+  const body = req.body as {
+    type?: string;
+    event?: string;
+    object?: { id?: string; status?: string; metadata?: { telegram_id?: string } };
+  };
 
-function isFailedPayment(body: Record<string, unknown>): boolean {
-  const status = String(body.payment_status || body.status || body.order_status || '').toLowerCase();
-  return ['failed', 'cancelled', 'canceled', 'refunded', 'chargeback'].includes(status);
-}
+  if (body.type !== 'notification' || !body.event || !body.object?.id) {
+    return res.status(400).json({ error: 'Invalid notification' });
+  }
 
-router.post('/prodamus', async (req: Request, res: Response) => {
-  const body = req.body as Record<string, unknown>;
-  const telegramId = extractTelegramId(body);
-
-  if (!telegramId) {
-    console.warn('Prodamus webhook: telegram_id не найден', body);
-    return res.status(400).json({ error: 'telegram_id required' });
+  if (body.event !== 'payment.succeeded') {
+    return res.json({ ok: true, action: 'ignored' });
   }
 
   try {
-    if (isSuccessPayment(body)) {
-      const expiresAt = await activateProdamusPremium(telegramId, PREMIUM_DAYS_DURATION);
-      await notifyPremiumActivated(telegramId, expiresAt);
-      return res.json({ ok: true, action: 'activated' });
+    const verified = await verifyYooKassaPayment(body.object.id);
+    if (!verified) {
+      console.warn('YooKassa webhook: платёж не прошёл проверку', body.object.id);
+      return res.status(400).json({ error: 'Payment verification failed' });
     }
 
-    if (isFailedPayment(body)) {
-      const user = await getUser(telegramId);
-      if (user?.is_premium) {
-        await expirePremium(telegramId);
-        await notifyPremiumCancelled(telegramId);
-      }
-      return res.json({ ok: true, action: 'cancelled' });
-    }
+    const expiresAt = await activateProdamusPremium(verified.telegramId, PREMIUM_DAYS_DURATION);
+    await notifyPremiumActivated(verified.telegramId, expiresAt);
 
-    res.json({ ok: true, action: 'ignored' });
+    res.json({ ok: true, action: 'activated' });
   } catch (err) {
-    console.error('Prodamus webhook error:', err);
+    console.error('YooKassa webhook error:', err);
     res.status(500).json({ error: 'internal error' });
   }
 });

@@ -61,6 +61,8 @@ export const api = {
 
   getSubscription: () => request<import('../types').SubscriptionStatus>('/subscription/status'),
 
+  createPayment: () => request<{ paymentUrl: string }>('/payment/create', { method: 'POST' }),
+
   getChatMessages: () =>
     request<{
       messages: import('../types').ChatMessage[];

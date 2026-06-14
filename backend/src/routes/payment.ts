@@ -1,7 +1,6 @@
 import { Router, Response } from 'express';
-import { activatePremium } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
-import { getBot } from '../bot/instance.js';
+import { getYooKassa, PREMIUM_DESCRIPTION, PREMIUM_PRICE } from '../services/yookassa.js';
 
 const router = Router();
 
@@ -15,57 +14,32 @@ router.get('/prices', (_req, res: Response) => {
   res.json({ prices });
 });
 
-router.post('/invoice', async (req: AuthRequest, res: Response) => {
-  const { plan } = req.body;
-  if (!['monthly', 'yearly'].includes(plan)) {
-    return res.status(400).json({ error: 'Неверный план' });
+router.post('/create', async (req: AuthRequest, res: Response) => {
+  const returnUrl = process.env.YOOKASSA_RETURN_URL;
+  if (!returnUrl) {
+    return res.status(503).json({ error: 'Оплата не настроена' });
   }
-
-  const bot = getBot();
-  if (!bot) {
-    return res.status(503).json({ error: 'Бот не настроен' });
-  }
-
-  const amount = prices[plan as keyof typeof prices];
-  const title = plan === 'monthly' ? 'Premium на 1 месяц' : 'Premium на 1 год';
-  const description =
-    plan === 'monthly'
-      ? 'Меню на 7 дней, безлимитный чат, обновление рациона'
-      : 'Premium на 1 год — меню на 7 дней и безлимитный чат';
 
   try {
-    const link = await bot.createInvoiceLink(
-      title,
-      description,
-      plan,
-      '',
-      'XTR',
-      [{ label: title, amount }]
-    );
-    res.json({ invoiceLink: link });
+    const yooKassa = getYooKassa();
+    const payment = await yooKassa.createPayment({
+      amount: { value: PREMIUM_PRICE, currency: 'RUB' },
+      capture: true,
+      confirmation: { type: 'redirect', return_url: returnUrl },
+      description: PREMIUM_DESCRIPTION,
+      metadata: { telegram_id: req.telegramId! },
+    });
+
+    const paymentUrl = payment.confirmationUrl;
+    if (!paymentUrl) {
+      return res.status(500).json({ error: 'Не удалось получить ссылку на оплату' });
+    }
+
+    res.json({ paymentUrl });
   } catch (error) {
-    console.error('Invoice error:', error);
-    res.status(500).json({ error: 'Не удалось создать счёт' });
+    console.error('YooKassa create payment error:', error);
+    res.status(500).json({ error: 'Не удалось создать платёж' });
   }
-});
-
-router.post('/activate', async (req: AuthRequest, res: Response) => {
-  const { plan } = req.body;
-  if (!['monthly', 'yearly'].includes(plan)) {
-    return res.status(400).json({ error: 'Неверный план' });
-  }
-
-  const now = new Date();
-  const premiumUntil = new Date(now);
-  if (plan === 'monthly') {
-    premiumUntil.setMonth(premiumUntil.getMonth() + 1);
-  } else {
-    premiumUntil.setFullYear(premiumUntil.getFullYear() + 1);
-  }
-
-  await activatePremium(req.telegramId!, premiumUntil.toISOString());
-
-  res.json({ success: true, premiumUntil: premiumUntil.toISOString() });
 });
 
 export default router;
