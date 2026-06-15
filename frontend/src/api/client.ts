@@ -5,14 +5,23 @@ function getInitData(): string {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Telegram-Init-Data': getInitData(),
-      ...options.headers,
-    },
-  });
+  if (!navigator.onLine) {
+    throw { error: 'offline', message: 'Нет подключения к интернету' };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': getInitData(),
+        ...options.headers,
+      },
+    });
+  } catch {
+    throw { error: 'offline', message: 'Нет подключения к интернету' };
+  }
 
   const data = await res.json();
   if (!res.ok) {
@@ -22,10 +31,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  getUser: () => request<{ exists: boolean; user?: import('../types').User }>('/user/me'),
+  getUser: () => request<{
+    exists: boolean;
+    daysAway?: number;
+    user?: import('../types').User;
+  }>('/user/me'),
 
   saveOnboarding: (data: Record<string, unknown>) =>
     request('/user/onboarding', { method: 'POST', body: JSON.stringify(data) }),
+
+  getSettings: () => request<{ notificationsEnabled: boolean }>('/user/settings'),
+
+  updateSettings: (notificationsEnabled: boolean) =>
+    request('/user/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ notificationsEnabled }),
+    }),
+
+  logEvent: (eventType: string) =>
+    request('/user/event', { method: 'POST', body: JSON.stringify({ eventType }) }),
 
   getPlan: () => request<{
     plan: import('../types').WeekPlan | null;
@@ -38,6 +62,12 @@ export const api = {
     request<{ plan: import('../types').WeekPlan; canRefresh: boolean; isPremium: boolean; maxDays: number }>(
       '/plan/generate',
       { method: 'POST', body: JSON.stringify({ upgrade }) }
+    ),
+
+  getShoppingList: () =>
+    request<{ list: string; remaining: number; limit: number; isPremium: boolean }>(
+      '/plan/shopping-list',
+      { method: 'POST' }
     ),
 
   replaceMeal: (dayNumber: number, mealType: string, recipeName: string) =>
@@ -60,6 +90,12 @@ export const api = {
     ),
 
   getSubscription: () => request<import('../types').SubscriptionStatus>('/subscription/status'),
+
+  cancelSubscription: () =>
+    request<{ success: boolean; premiumExpiresAt: string; message: string }>(
+      '/subscription/cancel',
+      { method: 'POST' }
+    ),
 
   createPayment: () => request<{ paymentUrl: string }>('/payment/create', { method: 'POST' }),
 

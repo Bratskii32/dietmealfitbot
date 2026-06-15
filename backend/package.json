@@ -12,9 +12,10 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "lowdb": "^7.0.1",
+    "node-cron": "^4.2.1",
     "node-telegram-bot-api": "^0.66.0",
     "pdfmake": "^0.2.18",
+    "pg": "^8.21.0",
     "typescript": "^5.7.2",
     "yookassa": "^0.1.1"
   },
@@ -22,8 +23,10 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.5",
+    "@types/node-cron": "^3.0.11",
     "@types/node-telegram-bot-api": "^0.64.7",
     "@types/pdfmake": "^0.2.11",
+    "@types/pg": "^8.20.0",
     "tsx": "^4.19.2"
   }
 }

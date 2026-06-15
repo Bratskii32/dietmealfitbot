@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
+import { ErrorToast } from '../components/ErrorToast';
+import { parseApiError } from '../utils/errors';
 import { ChatMessage } from '../types';
 
 interface Props {
@@ -21,7 +23,8 @@ export function Chat({ onShowPaywall }: Props) {
   const [weeklyUsed, setWeeklyUsed] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [toast, setToast] = useState<{ message: string; retry?: () => void } | null>(null);
+  const pendingMessage = useRef('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,8 +55,9 @@ export function Chat({ onShowPaywall }: Props) {
     }
 
     setLoading(true);
-    setError('');
+    setToast(null);
     setInput('');
+    pendingMessage.current = text;
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
 
     try {
@@ -62,12 +66,17 @@ export function Chat({ onShowPaywall }: Props) {
       setRemaining(data.remaining);
       setWeeklyUsed(data.weeklyUsed);
       setIsPremium(data.isPremium);
+      pendingMessage.current = '';
     } catch (err: unknown) {
       const e = err as { status?: number; error?: string };
       if (e.status === 429 || e.error === 'premium_required') {
         onShowPaywall();
       } else {
-        setError(e.error || 'Попробуй через минуту');
+        const parsed = parseApiError(err);
+        setToast({
+          message: parsed.message,
+          retry: parsed.retryable ? () => sendMessage(pendingMessage.current || text) : undefined,
+        });
       }
       setMessages((prev) => prev.slice(0, -1));
     } finally {
@@ -126,7 +135,6 @@ export function Chat({ onShowPaywall }: Props) {
             </div>
           </div>
         )}
-        {error && <p className="error-text">{error}</p>}
         <div ref={bottomRef} />
       </div>
 
@@ -162,6 +170,10 @@ export function Chat({ onShowPaywall }: Props) {
           </button>
         </div>
       </div>
+
+      {toast && (
+        <ErrorToast message={toast.message} onRetry={toast.retry} onClose={() => setToast(null)} />
+      )}
     </div>
   );
 }

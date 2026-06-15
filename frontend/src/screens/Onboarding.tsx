@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { ProgressBar } from '../components/ProgressBar';
+import { ErrorToast } from '../components/ErrorToast';
 import { api } from '../api/client';
+import { parseApiError } from '../utils/errors';
 
 interface Props {
   defaultName: string;
@@ -20,7 +22,7 @@ export function Onboarding({ defaultName, onComplete }: Props) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
-  const [error, setError] = useState('');
+  const [toast, setToast] = useState<{ message: string; retry?: () => void } | null>(null);
 
   const [name, setName] = useState(defaultName);
   const [age, setAge] = useState('');
@@ -45,7 +47,7 @@ export function Onboarding({ defaultName, onComplete }: Props) {
 
   const handleFinish = async () => {
     setLoading(true);
-    setError('');
+    setToast(null);
     try {
       await api.saveOnboarding({
         name,
@@ -62,8 +64,9 @@ export function Onboarding({ defaultName, onComplete }: Props) {
       setLoading(false);
       setCelebrating(true);
       setTimeout(() => onComplete(), 2000);
-    } catch {
-      setError('Попробуй через минуту');
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setToast({ message: parsed.message, retry: parsed.retryable ? handleFinish : undefined });
       setLoading(false);
     }
   };
@@ -86,13 +89,16 @@ export function Onboarding({ defaultName, onComplete }: Props) {
         <p style={{ fontSize: 16, color: 'var(--text-secondary)' }}>
           AI составляет твой рацион...<br />обычно 10–15 секунд
         </p>
+        {toast && (
+          <ErrorToast message={toast.message} onRetry={toast.retry} onClose={() => setToast(null)} />
+        )}
       </div>
     );
   }
 
   return (
     <div className="screen-content">
-      <ProgressBar current={step} total={5} />
+      <ProgressBar current={step} total={6} />
 
       {step === 1 && (
         <>
@@ -200,12 +206,33 @@ export function Onboarding({ defaultName, onComplete }: Props) {
               ))}
             </div>
           </div>
-          {error && <p className="error-text">{error}</p>}
           <div className="options-row" style={{ gap: 12 }}>
             <button className="btn-secondary" onClick={() => setStep(4)}>Назад</button>
+            <button className="btn-primary" onClick={() => setStep(6)}>Далее</button>
+          </div>
+        </>
+      )}
+
+      {step === 6 && (
+        <>
+          <h2 style={{ marginBottom: 16, fontSize: 22 }}>Готово! 🎉</h2>
+          <p style={{ marginBottom: 16, color: 'var(--text-secondary)' }}>
+            Я составлю для тебя:
+          </p>
+          <div className="card" style={{ marginBottom: 24, fontSize: 15, lineHeight: 2 }}>
+            <div>✓ Рацион на 3 дня с рецептами</div>
+            <div>✓ Список КБЖУ на каждый день</div>
+            <div>✓ 3 совета от AI-диетолога</div>
+          </div>
+          <div className="options-row" style={{ gap: 12 }}>
+            <button className="btn-secondary" onClick={() => setStep(5)}>Назад</button>
             <button className="btn-primary" onClick={handleFinish}>Создать мой рацион 🚀</button>
           </div>
         </>
+      )}
+
+      {toast && step !== 6 && (
+        <ErrorToast message={toast.message} onRetry={toast.retry} onClose={() => setToast(null)} />
       )}
     </div>
   );

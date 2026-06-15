@@ -12,6 +12,7 @@ export interface User {
   isPremium: boolean;
   onboardingComplete: boolean;
   maxDays?: number;
+  notificationsEnabled?: boolean;
 }
 
 export interface Recipe {
@@ -68,4 +69,5 @@ export interface SubscriptionStatus {
   isPremium: boolean;
   premiumExpiresAt: string | null;
   daysLeft: number;
+  cancelled?: boolean;
 }

@@ -1,25 +1,26 @@
 import { Router, Response } from 'express';
 import {
-  getUser,
   incrementWeeklyChat,
-  getWeeklyChatCount,
+  getWeeklyQueryCount,
   getChatMessages,
   getChatHistory,
   insertChatMessage,
   parseAllergies,
+  logEvent,
 } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { chatWithDietitian } from '../services/claude.js';
 import { FREEMIUM } from '../config/freemium.js';
 import { resolvePremiumUser } from '../services/premium.js';
+import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
 
 const router = Router();
 const WEEKLY_LIMIT = FREEMIUM.FREE_CHAT_WEEKLY;
 
 router.get('/messages', async (req: AuthRequest, res: Response) => {
   const messages = await getChatMessages(req.telegramId!);
-  const { isPremium, user } = await resolvePremiumUser(req.telegramId!);
-  const used = getWeeklyChatCount(user);
+  const { isPremium } = await resolvePremiumUser(req.telegramId!);
+  const used = await getWeeklyQueryCount(req.telegramId!);
   const remaining = isPremium ? -1 : Math.max(0, WEEKLY_LIMIT - used);
 
   res.json({
@@ -46,7 +47,7 @@ router.post('/send', async (req: AuthRequest, res: Response) => {
     return res.status(404).json({ error: 'Пользователь не найден' });
   }
 
-  const used = getWeeklyChatCount(user);
+  const used = await getWeeklyQueryCount(req.telegramId!);
 
   if (!isPremium && used >= WEEKLY_LIMIT) {
     return res.status(429).json({
@@ -77,6 +78,7 @@ router.post('/send', async (req: AuthRequest, res: Response) => {
 
     await insertChatMessage(req.telegramId!, 'user', message);
     await insertChatMessage(req.telegramId!, 'assistant', reply);
+    await logEvent(req.telegramId!, 'chat_message_sent');
 
     let newUsed = used;
     if (!isPremium) {
@@ -93,8 +95,11 @@ router.post('/send', async (req: AuthRequest, res: Response) => {
       weeklyUsed: newUsed,
     });
   } catch (error) {
-    console.error('Chat error:', error);
-    res.status(503).json({ error: 'Попробуй через минуту' });
+    try {
+      handleClaudeError(error);
+    } catch {
+      return serviceUnavailableResponse(res);
+    }
   }
 });
 

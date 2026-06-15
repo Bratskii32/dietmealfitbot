@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { AuthRequest } from '../middleware/auth.js';
 import { getYooKassa, PREMIUM_DESCRIPTION, PREMIUM_PRICE } from '../services/yookassa.js';
+import { logEvent } from '../db/repository.js';
 
 const router = Router();
 
@@ -21,13 +22,17 @@ router.post('/create', async (req: AuthRequest, res: Response) => {
   }
 
   try {
+    await logEvent(req.telegramId!, 'payment_started');
     const yooKassa = getYooKassa();
     const payment = await yooKassa.createPayment({
       amount: { value: PREMIUM_PRICE, currency: 'RUB' },
       capture: true,
       confirmation: { type: 'redirect', return_url: returnUrl },
       description: PREMIUM_DESCRIPTION,
-      metadata: { telegram_id: req.telegramId! },
+      metadata: {
+        telegram_id: req.telegramId!,
+        shop_name: 'Твой Диетолог',
+      },
     });
 
     const paymentUrl = payment.confirmationUrl;

@@ -1,9 +1,8 @@
 import { Router, Response } from 'express';
 import {
-  getUser,
   getLatestPlan,
   parseAllergies,
-  getSnackAdviceCount,
+  getAdviceQueryCount,
   incrementSnackAdvice,
   setDailyStatus,
 } from '../db/repository.js';
@@ -15,6 +14,7 @@ import {
   suggestWhatToEat,
   WeekPlan,
 } from '../services/claude.js';
+import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
 
 const router = Router();
 
@@ -51,8 +51,8 @@ router.get('/status', async (req: AuthRequest, res: Response) => {
 });
 
 router.get('/what-to-eat/status', async (req: AuthRequest, res: Response) => {
-  const { isPremium, user } = await resolvePremiumUser(req.telegramId!);
-  const used = getSnackAdviceCount(user);
+  const { isPremium } = await resolvePremiumUser(req.telegramId!);
+  const used = await getAdviceQueryCount(req.telegramId!);
   const limit = FREEMIUM.FREE_SNACK_ADVICE_TOTAL;
   res.json({
     isPremium,
@@ -66,7 +66,7 @@ router.post('/what-to-eat', async (req: AuthRequest, res: Response) => {
   const { isPremium, user } = await resolvePremiumUser(req.telegramId!);
   if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
 
-  const used = getSnackAdviceCount(user);
+  const used = await getAdviceQueryCount(req.telegramId!);
   const limit = FREEMIUM.FREE_SNACK_ADVICE_TOTAL;
 
   if (!isPremium && used >= limit) {
@@ -106,8 +106,12 @@ router.post('/what-to-eat', async (req: AuthRequest, res: Response) => {
         : undefined;
 
     res.json({ suggestion, used: newUsed, limit, remaining, warning, isPremium });
-  } catch {
-    res.status(503).json({ error: 'Попробуй через минуту' });
+  } catch (error) {
+    try {
+      handleClaudeError(error);
+    } catch {
+      return serviceUnavailableResponse(res);
+    }
   }
 });
 

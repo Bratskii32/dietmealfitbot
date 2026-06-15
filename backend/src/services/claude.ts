@@ -233,3 +233,13 @@ export async function generateProgressComment(streakDays: number, goal: string):
     `Короткий (до 8 слов) комментарий для человека который придерживается плана ${streakDays} дней. Цель: ${goalLabel}. Стиль: поддерживающий, конкретный. Только русский язык.`
   );
 }
+
+export async function generateShoppingList(weekPlan: WeekPlan): Promise<string> {
+  const planJson = JSON.stringify(weekPlan, null, 2);
+  return askClaude(
+    `На основе этого рациона на неделю составь список продуктов для похода в магазин. Сгруппируй по категориям: Мясо и рыба / Овощи и фрукты / Молочное / Крупы и злаки / Прочее.
+Укажи количество каждого продукта в граммах суммарно на всю неделю. Рацион: ${planJson}
+Ответ только на русском языке, без лишнего текста до и после списка.`,
+    2048
+  );
+}

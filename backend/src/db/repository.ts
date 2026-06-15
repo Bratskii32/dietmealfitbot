@@ -1,8 +1,79 @@
-import { UserRow, ChatMessageRow, WeekPlanRow } from './types.js';
-import { getDb, persist, now } from './store.js';
+import { query, now } from './pool.js';
+import { UserRow, ChatMessageRow, WeekPlanRow, EventType } from './types.js';
+
+type DbUser = {
+  telegram_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  username: string | null;
+  name: string | null;
+  age: number | null;
+  gender: string | null;
+  height: number | null;
+  weight: number | null;
+  goal: string | null;
+  activity_level: string | null;
+  meals_per_day: number | null;
+  allergies: unknown;
+  is_premium: boolean;
+  premium_until: Date | null;
+  premium_expiry_notified: boolean;
+  subscription_cancelled: boolean;
+  daily_status: string | null;
+  daily_status_date: string | null;
+  progress_ai_comment: string | null;
+  progress_ai_comment_date: string | null;
+  onboarding_complete: boolean;
+  consent_accepted: boolean;
+  pdf_gift_sent: boolean;
+  last_plan_refresh: string | null;
+  notifications_enabled: boolean;
+  last_seen_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+};
+
+function boolToInt(v: boolean | null | undefined): number {
+  return v ? 1 : 0;
+}
+
+function mapUser(row: DbUser): UserRow {
+  return {
+    telegram_id: row.telegram_id,
+    first_name: row.first_name ?? undefined,
+    last_name: row.last_name ?? undefined,
+    username: row.username ?? undefined,
+    name: row.name ?? undefined,
+    age: row.age ?? undefined,
+    gender: row.gender ?? undefined,
+    height: row.height ?? undefined,
+    weight: row.weight ?? undefined,
+    goal: row.goal ?? undefined,
+    activity_level: row.activity_level ?? undefined,
+    meals_per_day: row.meals_per_day ?? undefined,
+    allergies: (row.allergies as string[]) ?? [],
+    is_premium: boolToInt(row.is_premium),
+    premium_until: row.premium_until?.toISOString(),
+    premium_expiry_notified: boolToInt(row.premium_expiry_notified),
+    subscription_cancelled: boolToInt(row.subscription_cancelled),
+    daily_status: row.daily_status ?? undefined,
+    daily_status_date: row.daily_status_date ?? undefined,
+    progress_ai_comment: row.progress_ai_comment ?? undefined,
+    progress_ai_comment_date: row.progress_ai_comment_date ?? undefined,
+    onboarding_complete: boolToInt(row.onboarding_complete),
+    consent_accepted: boolToInt(row.consent_accepted),
+    pdf_gift_sent: boolToInt(row.pdf_gift_sent),
+    last_plan_refresh: row.last_plan_refresh ?? undefined,
+    notifications_enabled: boolToInt(row.notifications_enabled ?? true),
+    last_seen_at: row.last_seen_at?.toISOString(),
+    created_at: row.created_at.toISOString(),
+    updated_at: row.updated_at.toISOString(),
+  };
+}
 
 export async function getUser(telegramId: string): Promise<UserRow | undefined> {
-  return getDb().data.users.find((u) => u.telegram_id === telegramId);
+  const { rows } = await query<DbUser>('SELECT * FROM users WHERE telegram_id = $1', [telegramId]);
+  return rows[0] ? mapUser(rows[0]) : undefined;
 }
 
 export async function saveOnboarding(
@@ -19,74 +90,51 @@ export async function saveOnboarding(
     allergies: string[];
   }
 ): Promise<void> {
-  const db = getDb();
-  const existing = db.data.users.find((u) => u.telegram_id === telegramId);
   const timestamp = now();
-
-  if (existing) {
-    Object.assign(existing, {
-      name: data.name,
-      age: data.age,
-      gender: data.gender,
-      height: data.height,
-      weight: data.weight,
-      goal: data.goal,
-      activity_level: data.activityLevel,
-      meals_per_day: data.mealsPerDay,
-      allergies: data.allergies || [],
-      onboarding_complete: 1,
-      updated_at: timestamp,
-    });
-  } else {
-    db.data.users.push({
-      telegram_id: telegramId,
-      name: data.name,
-      age: data.age,
-      gender: data.gender,
-      height: data.height,
-      weight: data.weight,
-      goal: data.goal,
-      activity_level: data.activityLevel,
-      meals_per_day: data.mealsPerDay,
-      allergies: data.allergies || [],
-      onboarding_complete: 1,
-      created_at: timestamp,
-      updated_at: timestamp,
-    });
-  }
-  await persist();
+  await query(
+    `INSERT INTO users (
+      telegram_id, name, age, gender, height, weight, goal,
+      activity_level, meals_per_day, allergies, onboarding_complete, created_at, updated_at
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,$11)
+    ON CONFLICT (telegram_id) DO UPDATE SET
+      name = EXCLUDED.name, age = EXCLUDED.age, gender = EXCLUDED.gender,
+      height = EXCLUDED.height, weight = EXCLUDED.weight, goal = EXCLUDED.goal,
+      activity_level = EXCLUDED.activity_level, meals_per_day = EXCLUDED.meals_per_day,
+      allergies = EXCLUDED.allergies, onboarding_complete = TRUE, updated_at = EXCLUDED.updated_at`,
+    [
+      telegramId, data.name, data.age, data.gender, data.height, data.weight,
+      data.goal, data.activityLevel, data.mealsPerDay, JSON.stringify(data.allergies || []),
+      timestamp,
+    ]
+  );
 }
 
 export async function acceptConsent(telegramId: string, firstName?: string): Promise<boolean> {
-  const db = getDb();
-  let user = db.data.users.find((u) => u.telegram_id === telegramId);
-  const isFirstAccept = !user?.consent_accepted;
+  const existing = await getUser(telegramId);
+  const isFirstAccept = !existing?.consent_accepted;
   const timestamp = now();
 
-  if (user) {
-    user.consent_accepted = 1;
-    user.updated_at = timestamp;
-    if (firstName && !user.first_name) user.first_name = firstName;
+  if (existing) {
+    await query(
+      `UPDATE users SET consent_accepted = TRUE, updated_at = $2,
+       first_name = COALESCE(first_name, $3) WHERE telegram_id = $1`,
+      [telegramId, timestamp, firstName || null]
+    );
   } else {
-    db.data.users.push({
-      telegram_id: telegramId,
-      first_name: firstName,
-      consent_accepted: 1,
-      created_at: timestamp,
-      updated_at: timestamp,
-    });
+    await query(
+      `INSERT INTO users (telegram_id, first_name, consent_accepted, created_at, updated_at)
+       VALUES ($1, $2, TRUE, $3, $3)`,
+      [telegramId, firstName || null, timestamp]
+    );
+    await logEvent(telegramId, 'user_registered');
   }
-  await persist();
   return isFirstAccept;
 }
 
 export async function markPdfGiftSent(telegramId: string): Promise<void> {
-  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
-  if (user) {
-    user.pdf_gift_sent = 1;
-    user.updated_at = now();
-    await persist();
-  }
+  await query('UPDATE users SET pdf_gift_sent = TRUE, updated_at = $2 WHERE telegram_id = $1', [
+    telegramId, now(),
+  ]);
 }
 
 export function hasConsent(user: UserRow | undefined): boolean {
@@ -109,103 +157,86 @@ export function getWeekStartMonday(): string {
 }
 
 export async function expirePremium(telegramId: string): Promise<void> {
-  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
-  if (user) {
-    user.is_premium = 0;
-    user.premium_until = undefined;
-    user.updated_at = now();
-    await persist();
-  }
+  await query(
+    'UPDATE users SET is_premium = FALSE, premium_until = NULL, updated_at = $2 WHERE telegram_id = $1',
+    [telegramId, now()]
+  );
 }
 
 export async function markPremiumExpiryNotified(telegramId: string): Promise<void> {
-  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
-  if (user) {
-    user.premium_expiry_notified = 1;
-    await persist();
-  }
+  await query('UPDATE users SET premium_expiry_notified = TRUE WHERE telegram_id = $1', [telegramId]);
 }
 
 export async function activateProdamusPremium(telegramId: string, days = 30): Promise<string> {
-  const db = getDb();
-  let user = db.data.users.find((u) => u.telegram_id === telegramId);
   const premiumUntil = new Date();
   premiumUntil.setDate(premiumUntil.getDate() + days);
   const untilStr = premiumUntil.toISOString();
+  const timestamp = now();
 
-  if (user) {
-    user.is_premium = 1;
-    user.premium_until = untilStr;
-    user.premium_expiry_notified = 0;
-    user.updated_at = now();
-  } else {
-    db.data.users.push({
-      telegram_id: telegramId,
-      is_premium: 1,
-      premium_until: untilStr,
-      premium_expiry_notified: 0,
-      created_at: now(),
-      updated_at: now(),
-    });
-  }
-  await persist();
+  await query(
+    `INSERT INTO users (telegram_id, is_premium, premium_until, premium_expiry_notified, subscription_cancelled, created_at, updated_at)
+     VALUES ($1, TRUE, $2, FALSE, FALSE, $3, $3)
+     ON CONFLICT (telegram_id) DO UPDATE SET
+       is_premium = TRUE, premium_until = $2, premium_expiry_notified = FALSE,
+       subscription_cancelled = FALSE, updated_at = $3`,
+    [telegramId, untilStr, timestamp]
+  );
   return untilStr;
 }
 
-export function getSnackAdviceCount(user: UserRow | undefined): number {
-  return user?.snack_advice_count || 0;
+export async function cancelSubscription(telegramId: string): Promise<void> {
+  await query(
+    'UPDATE users SET subscription_cancelled = TRUE, updated_at = $2 WHERE telegram_id = $1',
+    [telegramId, now()]
+  );
+}
+
+export async function getAdviceQueryCount(telegramId: string): Promise<number> {
+  const { rows } = await query<{ count: string }>(
+    'SELECT COUNT(*)::text AS count FROM advice_queries WHERE telegram_id = $1',
+    [telegramId]
+  );
+  return parseInt(rows[0]?.count || '0', 10);
 }
 
 export async function incrementSnackAdvice(telegramId: string): Promise<number> {
-  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
-  if (user) {
-    user.snack_advice_count = (user.snack_advice_count || 0) + 1;
-    user.updated_at = now();
-    await persist();
-    return user.snack_advice_count;
-  }
-  return 0;
+  await query('INSERT INTO advice_queries (telegram_id) VALUES ($1)', [telegramId]);
+  return getAdviceQueryCount(telegramId);
 }
 
-export function getWeeklyChatCount(user: UserRow | undefined): number {
-  if (!user) return 0;
+export async function getWeeklyQueryCount(telegramId: string): Promise<number> {
   const weekStart = getWeekStartMonday();
-  if (user.chat_week_start !== weekStart) return 0;
-  return user.chat_week_count || 0;
+  const { rows } = await query<{ count: number | null }>(
+    'SELECT count FROM weekly_queries WHERE telegram_id = $1 AND week_start = $2',
+    [telegramId, weekStart]
+  );
+  return rows[0]?.count || 0;
 }
 
 export async function incrementWeeklyChat(telegramId: string): Promise<number> {
-  const db = getDb();
-  const user = db.data.users.find((u) => u.telegram_id === telegramId);
-  if (!user) return 0;
   const weekStart = getWeekStartMonday();
-  if (user.chat_week_start !== weekStart) {
-    user.chat_week_start = weekStart;
-    user.chat_week_count = 1;
-  } else {
-    user.chat_week_count = (user.chat_week_count || 0) + 1;
-  }
-  user.updated_at = now();
-  await persist();
-  return user.chat_week_count || 0;
+  const { rows } = await query<{ count: number }>(
+    `INSERT INTO weekly_queries (telegram_id, week_start, count)
+     VALUES ($1, $2, 1)
+     ON CONFLICT (telegram_id, week_start) DO UPDATE SET count = weekly_queries.count + 1
+     RETURNING count`,
+    [telegramId, weekStart]
+  );
+  return rows[0]?.count || 1;
 }
 
 export async function setDailyStatus(telegramId: string, status: string, date: string): Promise<void> {
-  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
-  if (user) {
-    user.daily_status = status;
-    user.daily_status_date = date;
-    await persist();
-  }
+  await query(
+    'UPDATE users SET daily_status = $2, daily_status_date = $3 WHERE telegram_id = $1',
+    [telegramId, status, date]
+  );
 }
 
 export async function setProgressComment(telegramId: string, comment: string, date: string): Promise<void> {
-  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
-  if (user) {
-    user.progress_ai_comment = comment;
-    user.progress_ai_comment_date = date;
-    await persist();
-  }
+  await query(
+    'UPDATE users SET progress_ai_comment = $2, progress_ai_comment_date = $3 WHERE telegram_id = $1',
+    [telegramId, comment, date]
+  );
 }
 
 export async function updateMealInPlan(
@@ -223,68 +254,60 @@ export async function updateMealInPlan(
   const meal = day.meals?.find((m: { type: string }) => m.type === mealType);
   if (!meal) return;
   meal.recipe = { ...newRecipe, replaceReason: reason };
-  planRow.plan_data = JSON.stringify(plan);
-  await persist();
+  await query('UPDATE week_plans SET plan_data = $2 WHERE id = $1', [planRow.id, JSON.stringify(plan)]);
 }
 
 export async function getLatestPlan(telegramId: string): Promise<WeekPlanRow | undefined> {
-  const plans = getDb().data.week_plans
-    .filter((p) => p.telegram_id === telegramId)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
-  return plans[0];
+  const { rows } = await query<{ id: number; telegram_id: string; plan_data: unknown; created_at: Date }>(
+    `SELECT id, telegram_id, plan_data, created_at FROM week_plans
+     WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    [telegramId]
+  );
+  if (!rows[0]) return undefined;
+  return {
+    id: rows[0].id,
+    telegram_id: rows[0].telegram_id,
+    plan_data: typeof rows[0].plan_data === 'string' ? rows[0].plan_data : JSON.stringify(rows[0].plan_data),
+    created_at: rows[0].created_at.toISOString(),
+  };
 }
 
 export async function insertPlan(telegramId: string, planData: string): Promise<void> {
-  const db = getDb();
-  db.data.counters.week_plans += 1;
-  db.data.week_plans.push({
-    id: db.data.counters.week_plans,
-    telegram_id: telegramId,
-    plan_data: planData,
-    created_at: now(),
-  });
-  await persist();
+  await query('INSERT INTO week_plans (telegram_id, plan_data) VALUES ($1, $2)', [
+    telegramId, planData,
+  ]);
 }
 
 export async function updateUserLastPlanRefresh(telegramId: string, date: string): Promise<void> {
-  const user = getDb().data.users.find((u) => u.telegram_id === telegramId);
-  if (user) {
-    user.last_plan_refresh = date;
-    user.updated_at = now();
-    await persist();
-  }
+  await query('UPDATE users SET last_plan_refresh = $2, updated_at = $3 WHERE telegram_id = $1', [
+    telegramId, date, now(),
+  ]);
 }
 
-export async function getQueryCount(telegramId: string, queryDate: string): Promise<number> {
-  const row = getDb().data.daily_queries.find(
-    (q) => q.telegram_id === telegramId && q.query_date === queryDate
-  );
-  return row?.count || 0;
-}
-
-export async function incrementQueryCount(telegramId: string, queryDate: string): Promise<void> {
-  const db = getDb();
-  const existing = db.data.daily_queries.find(
-    (q) => q.telegram_id === telegramId && q.query_date === queryDate
-  );
-  if (existing) {
-    existing.count += 1;
-  } else {
-    db.data.counters.daily_queries += 1;
-    db.data.daily_queries.push({
-      id: db.data.counters.daily_queries,
-      telegram_id: telegramId,
-      query_date: queryDate,
-      count: 1,
-    });
-  }
-  await persist();
+export async function updateLastSeen(telegramId: string): Promise<number> {
+  const user = await getUser(telegramId);
+  const previous = user?.last_seen_at ? new Date(user.last_seen_at) : null;
+  const timestamp = now();
+  await query('UPDATE users SET last_seen_at = $2, updated_at = $2 WHERE telegram_id = $1', [
+    telegramId, timestamp,
+  ]);
+  if (!previous) return 0;
+  const diffMs = Date.now() - previous.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
 export async function getChatMessages(telegramId: string): Promise<ChatMessageRow[]> {
-  return getDb().data.chat_messages
-    .filter((m) => m.telegram_id === telegramId)
-    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const { rows } = await query<{ id: number; telegram_id: string; role: string; content: string; created_at: Date }>(
+    'SELECT * FROM chat_messages WHERE telegram_id = $1 ORDER BY created_at ASC',
+    [telegramId]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    telegram_id: r.telegram_id,
+    role: r.role,
+    content: r.content,
+    created_at: r.created_at.toISOString(),
+  }));
 }
 
 export async function getChatHistory(telegramId: string, limit = 20): Promise<{ role: string; content: string }[]> {
@@ -292,91 +315,61 @@ export async function getChatHistory(telegramId: string, limit = 20): Promise<{ 
   return messages.slice(-limit).map((m) => ({ role: m.role, content: m.content }));
 }
 
-export async function insertChatMessage(
-  telegramId: string,
-  role: string,
-  content: string
-): Promise<void> {
-  const db = getDb();
-  db.data.counters.chat_messages += 1;
-  db.data.chat_messages.push({
-    id: db.data.counters.chat_messages,
-    telegram_id: telegramId,
-    role,
-    content,
-    created_at: now(),
-  });
-  await persist();
+export async function insertChatMessage(telegramId: string, role: string, content: string): Promise<void> {
+  await query('INSERT INTO chat_messages (telegram_id, role, content) VALUES ($1, $2, $3)', [
+    telegramId, role, content,
+  ]);
 }
 
 export async function insertCookedRecipe(telegramId: string, recipeName: string): Promise<void> {
-  const db = getDb();
-  db.data.counters.cooked_recipes += 1;
-  db.data.cooked_recipes.push({
-    id: db.data.counters.cooked_recipes,
-    telegram_id: telegramId,
-    recipe_name: recipeName,
-    cooked_at: now(),
-  });
-  await persist();
+  await query('INSERT INTO cooked_recipes (telegram_id, recipe_name) VALUES ($1, $2)', [
+    telegramId, recipeName,
+  ]);
 }
 
 export async function getWeightLog(telegramId: string): Promise<{ weight: number; log_date: string }[]> {
-  return getDb().data.weight_log
-    .filter((w) => w.telegram_id === telegramId)
-    .sort((a, b) => a.log_date.localeCompare(b.log_date))
-    .map((w) => ({ weight: w.weight, log_date: w.log_date }));
+  const { rows } = await query<{ weight: number; log_date: string }>(
+    'SELECT weight, log_date FROM weight_log WHERE telegram_id = $1 ORDER BY log_date ASC',
+    [telegramId]
+  );
+  return rows;
 }
 
 export async function getCookedCount(telegramId: string): Promise<number> {
-  return getDb().data.cooked_recipes.filter((r) => r.telegram_id === telegramId).length;
+  const { rows } = await query<{ count: string }>(
+    'SELECT COUNT(*)::text AS count FROM cooked_recipes WHERE telegram_id = $1',
+    [telegramId]
+  );
+  return parseInt(rows[0]?.count || '0', 10);
 }
 
 export async function getCookedDates(telegramId: string): Promise<string[]> {
-  const dates = new Set<string>();
-  for (const r of getDb().data.cooked_recipes) {
-    if (r.telegram_id === telegramId) {
-      dates.add(r.cooked_at.split('T')[0]);
-    }
-  }
-  return Array.from(dates).sort((a, b) => b.localeCompare(a));
+  const { rows } = await query<{ d: string }>(
+    `SELECT DISTINCT cooked_at::date::text AS d FROM cooked_recipes
+     WHERE telegram_id = $1 ORDER BY d DESC`,
+    [telegramId]
+  );
+  return rows.map((r) => r.d);
 }
 
 export async function upsertWeight(telegramId: string, weight: number, logDate: string): Promise<void> {
-  const db = getDb();
-  const existing = db.data.weight_log.find(
-    (w) => w.telegram_id === telegramId && w.log_date === logDate
+  await query(
+    `INSERT INTO weight_log (telegram_id, weight, log_date)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (telegram_id, log_date) DO UPDATE SET weight = EXCLUDED.weight`,
+    [telegramId, weight, logDate]
   );
-  if (existing) {
-    existing.weight = weight;
-  } else {
-    db.data.counters.weight_log += 1;
-    db.data.weight_log.push({
-      id: db.data.counters.weight_log,
-      telegram_id: telegramId,
-      weight,
-      log_date: logDate,
-      created_at: now(),
-    });
-  }
-  const user = db.data.users.find((u) => u.telegram_id === telegramId);
-  if (user) {
-    user.weight = weight;
-    user.updated_at = now();
-  }
-  await persist();
+  await query('UPDATE users SET weight = $2, updated_at = $3 WHERE telegram_id = $1', [
+    telegramId, weight, now(),
+  ]);
 }
 
 export async function activatePremium(telegramId: string, premiumUntil: string): Promise<void> {
-  const db = getDb();
-  const user = db.data.users.find((u) => u.telegram_id === telegramId);
-  if (user) {
-    user.is_premium = 1;
-    user.premium_until = premiumUntil;
-    user.premium_expiry_notified = 0;
-    user.updated_at = now();
-  }
-  await persist();
+  await query(
+    `UPDATE users SET is_premium = TRUE, premium_until = $2, premium_expiry_notified = FALSE, updated_at = $3
+     WHERE telegram_id = $1`,
+    [telegramId, premiumUntil, now()]
+  );
 }
 
 export async function upsertPremiumUser(
@@ -384,35 +377,94 @@ export async function upsertPremiumUser(
   firstName: string,
   premiumUntil: string
 ): Promise<void> {
-  const db = getDb();
-  const existing = db.data.users.find((u) => u.telegram_id === telegramId);
-  if (existing) {
-    existing.is_premium = 1;
-    existing.premium_until = premiumUntil;
-    existing.updated_at = now();
-  } else {
-    const timestamp = now();
-    db.data.users.push({
-      telegram_id: telegramId,
-      first_name: firstName,
-      is_premium: 1,
-      premium_until: premiumUntil,
-      created_at: timestamp,
-      updated_at: timestamp,
-    });
-  }
-  await persist();
+  const timestamp = now();
+  await query(
+    `INSERT INTO users (telegram_id, first_name, is_premium, premium_until, created_at, updated_at)
+     VALUES ($1, $2, TRUE, $3, $4, $4)
+     ON CONFLICT (telegram_id) DO UPDATE SET
+       is_premium = TRUE, premium_until = $3, updated_at = $4`,
+    [telegramId, firstName, premiumUntil, timestamp]
+  );
 }
 
 export async function deleteUserData(telegramId: string): Promise<void> {
-  const db = getDb();
-  db.data.users = db.data.users.filter((u) => u.telegram_id !== telegramId);
-  db.data.week_plans = db.data.week_plans.filter((p) => p.telegram_id !== telegramId);
-  db.data.chat_messages = db.data.chat_messages.filter((m) => m.telegram_id !== telegramId);
-  db.data.daily_queries = db.data.daily_queries.filter((q) => q.telegram_id !== telegramId);
-  db.data.weight_log = db.data.weight_log.filter((w) => w.telegram_id !== telegramId);
-  db.data.cooked_recipes = db.data.cooked_recipes.filter((r) => r.telegram_id !== telegramId);
-  await persist();
+  await query('DELETE FROM users WHERE telegram_id = $1', [telegramId]);
+}
+
+export async function setNotificationsEnabled(telegramId: string, enabled: boolean): Promise<void> {
+  await query('UPDATE users SET notifications_enabled = $2, updated_at = $3 WHERE telegram_id = $1', [
+    telegramId, enabled, now(),
+  ]);
+}
+
+export async function getUsersWithPlansForReminders(): Promise<
+  { telegram_id: string; name: string; first_name: string | null; plan_data: unknown }[]
+> {
+  const { rows } = await query<{
+    telegram_id: string;
+    name: string | null;
+    first_name: string | null;
+    plan_data: unknown;
+  }>(
+    `SELECT u.telegram_id, u.name, u.first_name, wp.plan_data
+     FROM users u
+     INNER JOIN LATERAL (
+       SELECT plan_data FROM week_plans WHERE telegram_id = u.telegram_id
+       ORDER BY created_at DESC LIMIT 1
+     ) wp ON TRUE
+     WHERE u.notifications_enabled = TRUE AND u.onboarding_complete = TRUE`
+  );
+  return rows.map((r) => ({
+    telegram_id: r.telegram_id,
+    name: r.name || r.first_name || 'друг',
+    first_name: r.first_name,
+    plan_data: r.plan_data,
+  }));
+}
+
+export async function logEvent(
+  telegramId: string | null,
+  eventType: EventType,
+  payload: Record<string, unknown> = {}
+): Promise<void> {
+  await query('INSERT INTO events (telegram_id, event_type, payload) VALUES ($1, $2, $3)', [
+    telegramId, eventType, JSON.stringify(payload),
+  ]);
+}
+
+export async function getAdminStats(): Promise<{
+  total_users: number;
+  premium_users: number;
+  today_registrations: number;
+  conversion_rate: number;
+  total_revenue: number;
+}> {
+  const [users, premium, today, payments] = await Promise.all([
+    query<{ count: string }>('SELECT COUNT(*)::text AS count FROM users'),
+    query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM users
+       WHERE is_premium = TRUE AND premium_until > NOW()`
+    ),
+    query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM users WHERE created_at::date = CURRENT_DATE`
+    ),
+    query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM events WHERE event_type = 'payment_completed'`
+    ),
+  ]);
+
+  const total = parseInt(users.rows[0]?.count || '0', 10);
+  const premiumCount = parseInt(premium.rows[0]?.count || '0', 10);
+  const todayCount = parseInt(today.rows[0]?.count || '0', 10);
+  const paymentCount = parseInt(payments.rows[0]?.count || '0', 10);
+
+  return {
+    total_users: total,
+    premium_users: premiumCount,
+    today_registrations: todayCount,
+    conversion_rate: total > 0 ? Math.round((premiumCount / total) * 10000) / 100 : 0,
+    total_revenue: paymentCount * 299,
+  };
 }
 
 export function parseAllergies(user: UserRow): string[] {

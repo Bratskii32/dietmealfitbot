@@ -11,9 +11,11 @@ import paymentRoutes from './routes/payment.js';
 import homeRoutes from './routes/home.js';
 import subscriptionRoutes from './routes/subscription.js';
 import webhookRoutes from './routes/webhook.js';
+import adminRoutes from './routes/admin.js';
 import { initBot } from './bot/index.js';
 import { setBot } from './bot/instance.js';
 import { initDatabase } from './db/store.js';
+import { startReminderCron } from './services/reminders.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -26,6 +28,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/webhook', webhookRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.use('/api/user', authMiddleware, userRoutes);
 app.use('/api/plan', authMiddleware, planRoutes);
@@ -40,6 +43,7 @@ async function main() {
   await initDatabase();
 
   setBot(initBot());
+  startReminderCron();
 
   app.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}`);

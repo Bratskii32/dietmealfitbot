@@ -11,13 +11,11 @@ export interface UserRow {
   goal?: string;
   activity_level?: string;
   meals_per_day?: number;
-  allergies?: string[];
+  allergies?: string[] | string;
   is_premium?: number;
   premium_until?: string;
   premium_expiry_notified?: number;
-  snack_advice_count?: number;
-  chat_week_count?: number;
-  chat_week_start?: string;
+  subscription_cancelled?: number;
   daily_status?: string;
   daily_status_date?: string;
   progress_ai_comment?: string;
@@ -26,6 +24,8 @@ export interface UserRow {
   consent_accepted?: number;
   pdf_gift_sent?: number;
   last_plan_refresh?: string;
+  notifications_enabled?: number;
+  last_seen_at?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -45,13 +45,6 @@ export interface ChatMessageRow {
   created_at: string;
 }
 
-export interface DailyQueryRow {
-  id: number;
-  telegram_id: string;
-  query_date: string;
-  count: number;
-}
-
 export interface WeightLogRow {
   id: number;
   telegram_id: string;
@@ -67,34 +60,12 @@ export interface CookedRecipeRow {
   cooked_at: string;
 }
 
-export interface DatabaseSchema {
-  users: UserRow[];
-  week_plans: WeekPlanRow[];
-  chat_messages: ChatMessageRow[];
-  daily_queries: DailyQueryRow[];
-  weight_log: WeightLogRow[];
-  cooked_recipes: CookedRecipeRow[];
-  counters: {
-    week_plans: number;
-    chat_messages: number;
-    daily_queries: number;
-    weight_log: number;
-    cooked_recipes: number;
-  };
-}
-
-export const defaultData: DatabaseSchema = {
-  users: [],
-  week_plans: [],
-  chat_messages: [],
-  daily_queries: [],
-  weight_log: [],
-  cooked_recipes: [],
-  counters: {
-    week_plans: 0,
-    chat_messages: 0,
-    daily_queries: 0,
-    weight_log: 0,
-    cooked_recipes: 0,
-  },
-};
+export type EventType =
+  | 'user_registered'
+  | 'onboarding_completed'
+  | 'plan_generated'
+  | 'chat_message_sent'
+  | 'paywall_shown'
+  | 'payment_started'
+  | 'payment_completed'
+  | 'subscription_cancelled';

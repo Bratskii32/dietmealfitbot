@@ -82,3 +82,17 @@ export async function notifyPremiumCancelled(telegramId: string) {
     'ℹ️ Подписка Premium отменена. Бесплатный доступ сохранён.'
   );
 }
+
+export async function notifySubscriptionCancelled(telegramId: string, expiresAt: string) {
+  const bot = getBot();
+  if (!bot) return;
+  const date = new Date(expiresAt).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  await bot.sendMessage(
+    Number(telegramId),
+    `Подписка отменена. Доступ сохраняется до ${date}.\nНадеемся увидеть тебя снова! 🙏`
+  );
+}

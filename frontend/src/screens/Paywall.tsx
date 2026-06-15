@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import WebApp from '@twa-dev/sdk';
 import { api } from '../api/client';
+import { OFFER_URL } from '../constants/legal';
 
 interface Props {
   onClose: () => void;
@@ -11,6 +12,10 @@ interface Props {
 export function Paywall({ onClose, isPremium, premiumExpiresAt }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.logEvent('paywall_shown').catch(() => {});
+  }, []);
 
   const openPayment = async () => {
     setLoading(true);
@@ -25,20 +30,16 @@ export function Paywall({ onClose, isPremium, premiumExpiresAt }: Props) {
     }
   };
 
+  const openOffer = () => WebApp.openLink(OFFER_URL);
+
   const expiresLabel = premiumExpiresAt
     ? new Date(premiumExpiresAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
     : null;
 
   if (isPremium && expiresLabel) {
     return (
-      <div style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200,
-      }}>
-        <div style={{
-          background: 'white', borderRadius: '20px 20px 0 0', padding: 24,
-          width: '100%', maxWidth: 430,
-        }}>
+      <div className="modal-overlay">
+        <div className="modal-content modal-bottom">
           <div style={{ textAlign: 'center', marginBottom: 20 }}>
             <div style={{ fontSize: 48, marginBottom: 8 }}>⭐</div>
             <h2 style={{ fontSize: 22 }}>Premium активен</h2>
@@ -59,14 +60,8 @@ export function Paywall({ onClose, isPremium, premiumExpiresAt }: Props) {
   }
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 200,
-    }}>
-      <div style={{
-        background: 'white', borderRadius: '20px 20px 0 0', padding: 24,
-        width: '100%', maxWidth: 430,
-      }}>
+    <div className="modal-overlay">
+      <div className="modal-content modal-bottom">
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <h2 style={{ fontSize: 22, marginBottom: 8 }}>Твой персональный диетолог</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>
@@ -90,6 +85,11 @@ export function Paywall({ onClose, isPremium, premiumExpiresAt }: Props) {
         </button>
         <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-secondary)', marginTop: 12 }}>
           Оплата через ЮKassa · отменить можно в любой момент
+        </p>
+        <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-secondary)', marginTop: 8 }}>
+          <button type="button" onClick={openOffer} style={{ background: 'none', color: 'var(--primary)', fontSize: 11, textDecoration: 'underline' }}>
+            Оплачивая подписку, вы принимаете условия оферты
+          </button>
         </p>
         <button className="btn-secondary" style={{ marginTop: 10 }} onClick={onClose}>Позже</button>
       </div>

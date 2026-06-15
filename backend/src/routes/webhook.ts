@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { activateProdamusPremium } from '../db/repository.js';
+import { activateProdamusPremium, logEvent } from '../db/repository.js';
 import { notifyPremiumActivated } from '../services/premium.js';
 import { PREMIUM_DAYS_DURATION } from '../config/freemium.js';
 import { isTrustedYooKassaRequest, verifyYooKassaPayment } from '../services/yookassa.js';
@@ -34,6 +34,7 @@ router.post('/yookassa', async (req: Request, res: Response) => {
     }
 
     const expiresAt = await activateProdamusPremium(verified.telegramId, PREMIUM_DAYS_DURATION);
+    await logEvent(verified.telegramId, 'payment_completed', { paymentId: verified.paymentId });
     await notifyPremiumActivated(verified.telegramId, expiresAt);
 
     res.json({ ok: true, action: 'activated' });

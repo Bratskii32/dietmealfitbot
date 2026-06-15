@@ -18,11 +18,13 @@ export default function App() {
   const { isReady, user } = useTelegram();
   const [appState, setAppState] = useState<AppState>('loading');
   const [userName, setUserName] = useState('');
+  const [daysAway, setDaysAway] = useState(0);
   const [screen, setScreen] = useState<Screen>('home');
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [premiumExpiresAt, setPremiumExpiresAt] = useState<string | null>(null);
+  const [subscriptionCancelled, setSubscriptionCancelled] = useState(false);
 
   useEffect(() => {
     if (!isReady) return;
@@ -34,6 +36,7 @@ export default function App() {
       const sub = await api.getSubscription();
       setIsPremium(sub.isPremium);
       setPremiumExpiresAt(sub.premiumExpiresAt);
+      setSubscriptionCancelled(!!sub.cancelled);
     } catch { /* ignore */ }
   };
 
@@ -44,6 +47,7 @@ export default function App() {
       if (data.exists && data.user?.onboardingComplete) {
         setUserName(data.user.name || user?.first_name || 'друг');
         setIsPremium(data.user.isPremium);
+        setDaysAway(data.daysAway || 0);
         setAppState('app');
       } else {
         setAppState('onboarding');
@@ -62,6 +66,10 @@ export default function App() {
   const handleClosePaywall = () => {
     setShowPaywall(false);
     loadSubscription();
+  };
+
+  const handleShowPaywall = () => {
+    setShowPaywall(true);
   };
 
   if (appState === 'loading') {
@@ -97,19 +105,22 @@ export default function App() {
         <Home
           userName={userName}
           isPremium={isPremium}
+          daysAway={daysAway}
           onNavigate={setScreen}
           onRecipeSelect={setSelectedRecipe}
-          onShowPaywall={() => setShowPaywall(true)}
+          onShowPaywall={handleShowPaywall}
         />
       )}
-      {screen === 'chat' && <Chat onShowPaywall={() => setShowPaywall(true)} />}
+      {screen === 'chat' && <Chat onShowPaywall={handleShowPaywall} />}
       {screen === 'recipes' && <Recipes onRecipeSelect={setSelectedRecipe} />}
       {screen === 'progress' && <Progress />}
       {screen === 'settings' && (
         <Settings
           isPremium={isPremium}
           premiumExpiresAt={premiumExpiresAt}
-          onShowPaywall={() => setShowPaywall(true)}
+          subscriptionCancelled={subscriptionCancelled}
+          onShowPaywall={handleShowPaywall}
+          onSubscriptionChange={loadSubscription}
         />
       )}
 
