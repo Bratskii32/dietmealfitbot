@@ -260,7 +260,7 @@ export async function updateMealInPlan(
   const meal = day.meals?.find((m: { type: string }) => m.type === mealType);
   if (!meal) return;
   meal.recipe = { ...newRecipe, replaceReason: reason };
-  await query('UPDATE week_plans SET plan_data = $2 WHERE id = $1', [planRow.id, JSON.stringify(plan)]);
+  await query('UPDATE week_plans SET plan_data = $2, shopping_list = NULL, shopping_list_generated_at = NULL WHERE id = $1', [planRow.id, JSON.stringify(plan)]);
 }
 
 export async function getLatestPlan(telegramId: string): Promise<WeekPlanRow | undefined> {

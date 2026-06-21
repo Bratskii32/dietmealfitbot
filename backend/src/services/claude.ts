@@ -337,6 +337,23 @@ const MEAL_TYPE_LABELS: Record<string, string> = {
   snack: 'перекус',
 };
 
+const REPLACEMENT_RECIPE_JSON = `
+Верни ПОЛНЫЙ JSON с рецептом:
+{
+  "name": "...",
+  "description": "...",
+  "ingredients": [{"name": "...", "amount": "...", "unit": "г"}],
+  "instructions": ["шаг 1", "шаг 2"],
+  "cookingTime": 20,
+  "calories": 0,
+  "protein": 0,
+  "carbs": 0,
+  "fat": 0,
+  "servings": 1
+}
+Обязательно укажи реальные ингредиенты с граммовкой и пошаговую инструкцию приготовления — не используй фразы типа 'приготовь по аналогии' или 'как в оригинале'.
+Только русский язык, без текста до и после JSON.`;
+
 export async function suggestMealReplacement(
   recipeName: string,
   allergies: string[],
@@ -345,7 +362,7 @@ export async function suggestMealReplacement(
   mealType?: string,
   eatingStyle?: string | null,
   cookingTime?: string | null
-): Promise<{ name: string; calories: number; protein: number; carbs: number; fat: number; reason: string }> {
+): Promise<Recipe> {
   const goalLabel = GOAL_MAP[goal] || goal;
   const allergiesStr = allergies.join(', ') || 'нет';
 
@@ -355,16 +372,36 @@ export async function suggestMealReplacement(
     prompt = `Пользователь хочет ДРУГОЕ блюдо вместо ${recipeName} на ${mealLabel} (${mealLabel}).
 НЕ повторяй принцип исходного блюда — предложи принципиально другую категорию еды.
 Учти аллергии: ${allergiesStr}, цель: ${goalLabel}, стиль питания: ${eatingStyle ?? 'null'}, время готовки: ${cookingTime ?? 'null'}.
-Верни JSON: {name, calories, protein, carbs, fat, reason}. Только русский язык, без текста до и после JSON.`;
+${REPLACEMENT_RECIPE_JSON}`;
   } else {
     prompt = `Предложи вариацию блюда ${recipeName}. Учти аллергии: ${allergiesStr}, цель: ${goalLabel}. Сохрани основу блюда, адаптируй под цель.
-Верни строго JSON без текста до и после: {"name":"...","calories":0,"protein":0,"carbs":0,"fat":0,"reason":"..."}. Только русский язык.`;
+${REPLACEMENT_RECIPE_JSON}`;
   }
 
-  const text = await askClaude(prompt, 512);
+  const text = await askClaude(prompt, 2048);
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Не удалось распарсить замену');
-  return JSON.parse(match[0]);
+
+  const raw = JSON.parse(match[0]) as Partial<Recipe>;
+  if (!raw.name || !Array.isArray(raw.ingredients) || raw.ingredients.length === 0) {
+    throw new Error('AI вернул неполный рецепт');
+  }
+  if (!Array.isArray(raw.instructions) || raw.instructions.length === 0) {
+    throw new Error('AI вернул рецепт без инструкции');
+  }
+
+  return {
+    name: raw.name,
+    description: raw.description || '',
+    ingredients: raw.ingredients,
+    instructions: raw.instructions,
+    cookingTime: raw.cookingTime ?? 20,
+    calories: raw.calories ?? 0,
+    protein: raw.protein ?? 0,
+    carbs: raw.carbs ?? 0,
+    fat: raw.fat ?? 0,
+    servings: raw.servings ?? 1,
+  };
 }
 
 export async function generateProgressComment(streakDays: number, goal: string): Promise<string> {

@@ -133,27 +133,18 @@ router.post('/replace', async (req: AuthRequest, res: Response) => {
     );
 
     const newRecipe = {
-      name: replacement.name,
-      description: replacement.reason,
-      ingredients: [],
-      instructions: ['Приготовь по аналогии с заменой ингредиентов'],
-      cookingTime: 20,
-      calories: replacement.calories,
-      protein: replacement.protein,
-      carbs: replacement.carbs,
-      fat: replacement.fat,
-      servings: 1,
-      replaceReason: replacement.reason,
+      ...replacement,
+      replaceReason: replacement.description,
     };
 
-    await updateMealInPlan(req.telegramId!, dayNumber, mealType, newRecipe, replacement.reason);
+    await updateMealInPlan(req.telegramId!, dayNumber, mealType, newRecipe, replacement.description);
 
     const planRow = await getLatestPlan(req.telegramId!);
     const fullPlan = JSON.parse(planRow!.plan_data) as WeekPlan;
 
     res.json({
       meal: newRecipe,
-      reason: replacement.reason,
+      reason: replacement.description,
       plan: filterPlanByTier(fullPlan, true),
     });
   } catch (error) {
