@@ -35,6 +35,7 @@ export function Settings({
     : null;
 
   const openLink = (url: string) => WebApp.openLink(url);
+  const openSupport = () => WebApp.openTelegramLink('https://t.me/dietmealfitbot');
 
   const toggleNotifications = async () => {
     const next = !notificationsEnabled;
@@ -128,7 +129,7 @@ export function Settings({
       <button
         className="card"
         style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }}
-        onClick={() => openLink('https://t.me/dietmealfitbot')}
+        onClick={openSupport}
       >
         💬 Написать в поддержку
       </button>

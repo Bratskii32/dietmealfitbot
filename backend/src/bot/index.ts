@@ -57,6 +57,41 @@ function appKeyboard(frontendUrl: string, withHow = false) {
   return { inline_keyboard: rows };
 }
 
+function getAdminTelegramId(): string | null {
+  const id = process.env.ADMIN_TELEGRAM_ID?.trim();
+  return id || null;
+}
+
+function isAdmin(telegramId: string): boolean {
+  const adminId = getAdminTelegramId();
+  return !!adminId && telegramId === adminId;
+}
+
+function formatUsername(username?: string): string {
+  return username ? `@${username}` : 'без username';
+}
+
+const SUPPORT_AUTO_REPLY =
+  'Спасибо! Я получил твоё сообщение и отвечу как можно скорее 🙏';
+
+async function forwardSupportMessage(bot: TelegramBot, msg: TelegramBot.Message): Promise<void> {
+  const adminId = getAdminTelegramId();
+  if (!adminId) {
+    console.warn('ADMIN_TELEGRAM_ID не задан — сообщения поддержки не пересылаются');
+    return;
+  }
+
+  const telegramId = String(msg.from?.id);
+  const name = msg.from?.first_name || 'Пользователь';
+  const username = formatUsername(msg.from?.username);
+  const text = msg.text || '';
+
+  await bot.sendMessage(
+    adminId,
+    `💬 Поддержка от ${name} (ID: ${telegramId}, ${username}):\n${text}\n\nЧтобы ответить, используй команду:\n/reply ${telegramId} текст ответа`
+  );
+}
+
 export function initBot(): TelegramBot | null {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
@@ -108,6 +143,46 @@ export function initBot(): TelegramBot | null {
 
   bot.onText(/\/appss_verify/, async (msg) => {
     await bot.sendMessage(msg.chat.id, 'appss_46a816');
+  });
+
+  bot.onText(/^\/reply(?:@\w+)?\s+(\d+)\s+([\s\S]+)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const senderId = String(msg.from?.id);
+
+    if (!isAdmin(senderId)) {
+      await bot.sendMessage(chatId, 'Эта команда доступна только администратору.');
+      return;
+    }
+
+    const targetId = match?.[1];
+    const replyText = match?.[2]?.trim();
+    if (!targetId || !replyText) {
+      await bot.sendMessage(chatId, 'Использование: /reply {telegramId} текст ответа');
+      return;
+    }
+
+    try {
+      await bot.sendMessage(targetId, `💬 Поддержка:\n${replyText}`);
+      await bot.sendMessage(chatId, `✅ Ответ отправлен пользователю ${targetId}`);
+    } catch {
+      await bot.sendMessage(chatId, 'Не удалось отправить сообщение. Проверь ID пользователя.');
+    }
+  });
+
+  bot.on('message', async (msg) => {
+    if (!msg.text || msg.chat.type !== 'private') return;
+    if (msg.text.startsWith('/')) return;
+
+    const senderId = String(msg.from?.id);
+    if (!senderId || isAdmin(senderId)) return;
+
+    try {
+      await forwardSupportMessage(bot, msg);
+      await bot.sendMessage(msg.chat.id, SUPPORT_AUTO_REPLY);
+    } catch (err) {
+      console.error('Ошибка пересылки в поддержку:', err);
+      await bot.sendMessage(msg.chat.id, SUPPORT_AUTO_REPLY);
+    }
   });
 
   bot.on('callback_query', async (query) => {
