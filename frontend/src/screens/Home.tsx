@@ -4,6 +4,7 @@ import { MealCard } from '../components/MealCard';
 import { PlanSkeleton } from '../components/PlanSkeleton';
 import { ErrorToast } from '../components/ErrorToast';
 import { ShoppingListModal } from '../components/ShoppingListModal';
+import { ReplaceChoiceSheet } from '../components/ReplaceChoiceSheet';
 import { api } from '../api/client';
 import { parseApiError } from '../utils/errors';
 import { WeekPlan, Recipe, Screen } from '../types';
@@ -50,6 +51,12 @@ export function Home({
   const [shoppingList, setShoppingList] = useState('');
   const [showWelcomeBack, setShowWelcomeBack] = useState(daysAway >= 3);
   const [toast, setToast] = useState<{ message: string; retry?: () => void } | null>(null);
+  const [replaceTarget, setReplaceTarget] = useState<{
+    dayNumber: number;
+    mealType: string;
+    recipeName: string;
+  } | null>(null);
+  const [replaceLoading, setReplaceLoading] = useState(false);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const pullStartY = useRef(0);
@@ -155,18 +162,33 @@ export function Home({
     }
   };
 
-  const handleReplace = async (dayNumber: number, mealType: string, recipeName: string) => {
+  const handleReplaceClick = (dayNumber: number, mealType: string, recipeName: string) => {
+    setReplaceTarget({ dayNumber, mealType, recipeName });
+  };
+
+  const handleReplaceMode = async (mode: 'similar' | 'different') => {
+    if (!replaceTarget) return;
+    setReplaceLoading(true);
     const doReplace = async () => {
       try {
-        const data = await api.replaceMeal(dayNumber, mealType, recipeName);
+        const data = await api.replaceMeal(
+          replaceTarget.dayNumber,
+          replaceTarget.mealType,
+          replaceTarget.recipeName,
+          mode
+        );
         setPlan(data.plan);
+        setReplaceTarget(null);
       } catch (err: unknown) {
         const e = err as { error?: string; status?: number };
         if (e.error === 'premium_required' || e.status === 403) {
+          setReplaceTarget(null);
           onShowPaywall();
         } else {
-          showError(err, doReplace);
+          showError(err, () => handleReplaceMode(mode));
         }
+      } finally {
+        setReplaceLoading(false);
       }
     };
     await doReplace();
@@ -352,7 +374,7 @@ export function Home({
           dayNumber={day.dayNumber}
           isPremium={isPremium}
           onRecipeClick={() => onRecipeSelect(meal.recipe)}
-          onReplace={() => handleReplace(day.dayNumber, meal.type, meal.recipe.name)}
+          onReplace={() => handleReplaceClick(day.dayNumber, meal.type, meal.recipe.name)}
           onShowPaywall={onShowPaywall}
         />
       ))}
@@ -378,6 +400,15 @@ export function Home({
           loading={shoppingRefreshing}
           onRefresh={() => handleShoppingList(true)}
           onClose={() => setShoppingList('')}
+        />
+      )}
+
+      {replaceTarget && (
+        <ReplaceChoiceSheet
+          recipeName={replaceTarget.recipeName}
+          loading={replaceLoading}
+          onChoose={handleReplaceMode}
+          onClose={() => !replaceLoading && setReplaceTarget(null)}
         />
       )}
 

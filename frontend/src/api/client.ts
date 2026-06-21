@@ -82,10 +82,15 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ refresh }) }
     ),
 
-  replaceMeal: (dayNumber: number, mealType: string, recipeName: string) =>
+  replaceMeal: (
+    dayNumber: number,
+    mealType: string,
+    recipeName: string,
+    mode: 'similar' | 'different' = 'similar'
+  ) =>
     request<{ plan: import('../types').WeekPlan; meal: import('../types').Recipe; reason: string }>(
       '/plan/replace',
-      { method: 'POST', body: JSON.stringify({ dayNumber, mealType, recipeName }) }
+      { method: 'POST', body: JSON.stringify({ dayNumber, mealType, recipeName, mode }) }
     ),
 
   getRefreshStatus: () => request<{ canRefresh: boolean; isPremium: boolean; maxDays: number }>('/plan/refresh-status'),

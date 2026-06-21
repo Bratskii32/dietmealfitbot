@@ -108,16 +108,28 @@ router.post('/replace', async (req: AuthRequest, res: Response) => {
     return res.status(403).json({ error: 'premium_required', message: 'Замена блюда доступна в Premium' });
   }
 
-  const { dayNumber, mealType, recipeName } = req.body;
+  const { dayNumber, mealType, recipeName, mode = 'similar' } = req.body as {
+    dayNumber?: number;
+    mealType?: string;
+    recipeName?: string;
+    mode?: 'similar' | 'different';
+  };
   if (!dayNumber || !mealType || !recipeName) {
     return res.status(400).json({ error: 'Некорректные данные' });
+  }
+  if (mode !== 'similar' && mode !== 'different') {
+    return res.status(400).json({ error: 'Неверный режим замены' });
   }
 
   try {
     const replacement = await suggestMealReplacement(
       recipeName,
       parseAllergies(user!),
-      user!.goal || 'maintain'
+      user!.goal || 'maintain',
+      mode,
+      mealType,
+      user!.eating_style || null,
+      user!.cooking_time || null
     );
 
     const newRecipe = {

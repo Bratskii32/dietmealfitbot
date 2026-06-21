@@ -328,16 +328,40 @@ export async function suggestWhatToEat(
   );
 }
 
+export type ReplacementMode = 'similar' | 'different';
+
+const MEAL_TYPE_LABELS: Record<string, string> = {
+  breakfast: 'завтрак',
+  lunch: 'обед',
+  dinner: 'ужин',
+  snack: 'перекус',
+};
+
 export async function suggestMealReplacement(
   recipeName: string,
   allergies: string[],
-  goal: string
+  goal: string,
+  mode: ReplacementMode = 'similar',
+  mealType?: string,
+  eatingStyle?: string | null,
+  cookingTime?: string | null
 ): Promise<{ name: string; calories: number; protein: number; carbs: number; fat: number; reason: string }> {
   const goalLabel = GOAL_MAP[goal] || goal;
-  const text = await askClaude(
-    `Предложи замену для "${recipeName}". Учти аллергии: ${allergies.join(', ') || 'нет'}, цель: ${goalLabel}. Верни строго JSON без текста до и после: {"name":"...","calories":0,"protein":0,"carbs":0,"fat":0,"reason":"..."}. Только русский язык.`,
-    512
-  );
+  const allergiesStr = allergies.join(', ') || 'нет';
+
+  let prompt: string;
+  if (mode === 'different') {
+    const mealLabel = MEAL_TYPE_LABELS[mealType || ''] || mealType || 'приём пищи';
+    prompt = `Пользователь хочет ДРУГОЕ блюдо вместо ${recipeName} на ${mealLabel} (${mealLabel}).
+НЕ повторяй принцип исходного блюда — предложи принципиально другую категорию еды.
+Учти аллергии: ${allergiesStr}, цель: ${goalLabel}, стиль питания: ${eatingStyle ?? 'null'}, время готовки: ${cookingTime ?? 'null'}.
+Верни JSON: {name, calories, protein, carbs, fat, reason}. Только русский язык, без текста до и после JSON.`;
+  } else {
+    prompt = `Предложи вариацию блюда ${recipeName}. Учти аллергии: ${allergiesStr}, цель: ${goalLabel}. Сохрани основу блюда, адаптируй под цель.
+Верни строго JSON без текста до и после: {"name":"...","calories":0,"protein":0,"carbs":0,"fat":0,"reason":"..."}. Только русский язык.`;
+  }
+
+  const text = await askClaude(prompt, 512);
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Не удалось распарсить замену');
   return JSON.parse(match[0]);
