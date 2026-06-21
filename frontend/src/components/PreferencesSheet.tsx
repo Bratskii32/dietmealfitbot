@@ -12,17 +12,92 @@ interface Props {
 }
 
 const STYLES = [
-  { id: 'quick', label: '🏃 Быстро' },
-  { id: 'healthy', label: '🥗 ПП' },
-  { id: 'cooking', label: '🍝 Готовить' },
-  { id: 'varied', label: '🌍 Разное' },
+  {
+    id: 'quick',
+    emoji: '🏃',
+    title: 'Быстро и просто',
+    subtitle: 'Яйца, каши, курица — то что есть дома',
+  },
+  {
+    id: 'healthy',
+    emoji: '🥗',
+    title: 'Стараюсь питаться правильно',
+    subtitle: 'ПП, авокадо, цельные продукты, слежу за составом',
+  },
+  {
+    id: 'cooking',
+    emoji: '🍝',
+    title: 'Люблю готовить',
+    subtitle: 'Разнообразные блюда, не тороплюсь на кухне',
+  },
+  {
+    id: 'varied',
+    emoji: '🌍',
+    title: 'Хочу пробовать новое',
+    subtitle: 'Разные кухни, интересные рецепты, открыт к новому',
+  },
 ];
 
 const TIMES = [
-  { id: 'quick', label: '⚡ 15 мин' },
-  { id: 'medium', label: '🍳 30 мин' },
-  { id: 'long', label: '👨‍🍳 Не важно' },
+  {
+    id: 'quick',
+    emoji: '⚡',
+    title: 'До 15 минут',
+    subtitle: 'Максимально быстро',
+  },
+  {
+    id: 'medium',
+    emoji: '🍳',
+    title: 'До 30 минут',
+    subtitle: 'Нормально, не тороплюсь',
+  },
+  {
+    id: 'long',
+    emoji: '👨‍🍳',
+    title: 'Больше 30 минут',
+    subtitle: 'Люблю готовить, время есть',
+  },
 ];
+
+function OptionCard({
+  emoji,
+  title,
+  subtitle,
+  selected,
+  onClick,
+}: {
+  emoji: string;
+  title: string;
+  subtitle: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 12,
+        width: '100%',
+        padding: 12,
+        marginBottom: 8,
+        borderRadius: 12,
+        border: `2px solid ${selected ? 'var(--primary)' : 'var(--border)'}`,
+        background: selected ? 'var(--primary-light)' : 'white',
+        textAlign: 'left',
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{ fontSize: 24, lineHeight: 1, flexShrink: 0 }}>{emoji}</span>
+      <div>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>{title}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{subtitle}</div>
+      </div>
+    </button>
+  );
+}
 
 export function PreferencesSheet({
   initialEatingStyle,
@@ -67,31 +142,38 @@ export function PreferencesSheet({
           1 секунда — и рацион станет точнее
         </p>
 
-        <p style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Твой стиль еды</p>
-        <div className="options-row" style={{ flexWrap: 'wrap', marginBottom: 20 }}>
+        <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>
+          Как ты обычно питаешься?
+        </h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
+          Подберём рацион под твой ритм жизни
+        </p>
+        <div style={{ marginBottom: 20 }}>
           {STYLES.map((s) => (
-            <button
+            <OptionCard
               key={s.id}
-              className={`btn-option ${eatingStyle === s.id ? 'selected' : ''}`}
-              style={{ flex: '1 1 45%', fontSize: 13, padding: '10px 8px' }}
+              emoji={s.emoji}
+              title={s.title}
+              subtitle={s.subtitle}
+              selected={eatingStyle === s.id}
               onClick={() => setEatingStyle(eatingStyle === s.id ? null : s.id)}
-            >
-              {s.label}
-            </button>
+            />
           ))}
         </div>
 
-        <p style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Время на готовку</p>
-        <div className="options-row" style={{ flexWrap: 'wrap', marginBottom: 20 }}>
+        <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>
+          Сколько времени на готовку?
+        </h3>
+        <div style={{ marginBottom: 20 }}>
           {TIMES.map((t) => (
-            <button
+            <OptionCard
               key={t.id}
-              className={`btn-option ${cookingTime === t.id ? 'selected' : ''}`}
-              style={{ flex: '1 1 30%', fontSize: 13, padding: '10px 6px' }}
+              emoji={t.emoji}
+              title={t.title}
+              subtitle={t.subtitle}
+              selected={cookingTime === t.id}
               onClick={() => setCookingTime(cookingTime === t.id ? null : t.id)}
-            >
-              {t.label}
-            </button>
+            />
           ))}
         </div>
 
