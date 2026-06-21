@@ -24,6 +24,7 @@ export function Settings({
 }: Props) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showSupportHint, setShowSupportHint] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
@@ -35,7 +36,23 @@ export function Settings({
     : null;
 
   const openLink = (url: string) => WebApp.openLink(url);
-  const openSupport = () => WebApp.openTelegramLink('https://t.me/dietmealfitbot');
+
+  /** Mini App уже открыт в @dietmealfitbot — openTelegramLink на того же бота не срабатывает */
+  const openSupport = () => {
+    setShowSupportHint(true);
+  };
+
+  const closeAppForSupport = () => {
+    try {
+      if (window.Telegram?.WebApp?.close) {
+        window.Telegram.WebApp.close();
+        return;
+      }
+      WebApp.close();
+    } catch {
+      setShowSupportHint(false);
+    }
+  };
 
   const toggleNotifications = async () => {
     const next = !notificationsEnabled;
@@ -149,6 +166,24 @@ export function Settings({
       >
         🔒 Политика конфиденциальности
       </button>
+
+      {showSupportHint && (
+        <div className="modal-overlay" onClick={() => setShowSupportHint(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, marginBottom: 12 }}>💬 Поддержка</h3>
+            <p style={{ marginBottom: 20, lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+              Напиши нам прямо в этот чат бота — просто отправь сообщение ниже.
+              Мы получим его и ответим как можно скорее.
+            </p>
+            <button className="btn-primary" onClick={closeAppForSupport}>
+              Закрыть приложение и написать
+            </button>
+            <button className="btn-secondary" style={{ marginTop: 10 }} onClick={() => setShowSupportHint(false)}>
+              Остаться в приложении
+            </button>
+          </div>
+        </div>
+      )}
 
       {showCancelDialog && expiresLabel && (
         <div className="modal-overlay" onClick={() => setShowCancelDialog(false)}>
