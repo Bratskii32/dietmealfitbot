@@ -136,7 +136,10 @@ export function PreferencesSheet({
 
   return (
     <div className="modal-overlay" onClick={showSkip ? handleSkip : onClose}>
-      <div className="modal-content modal-bottom" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-content modal-bottom modal-bottom-scroll"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 style={{ fontSize: 20, marginBottom: 6 }}>Хочешь подстрою меню под тебя?</h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
           1 секунда — и рацион станет точнее
@@ -146,7 +149,7 @@ export function PreferencesSheet({
           Как ты обычно питаешься?
         </h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
-          Подберём рацион под твой ритм жизни
+          Выбери один вариант
         </p>
         <div style={{ marginBottom: 20 }}>
           {STYLES.map((s) => (
@@ -161,9 +164,12 @@ export function PreferencesSheet({
           ))}
         </div>
 
-        <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>
+        <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>
           Сколько времени на готовку?
         </h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
+          Выбери время
+        </p>
         <div style={{ marginBottom: 20 }}>
           {TIMES.map((t) => (
             <OptionCard

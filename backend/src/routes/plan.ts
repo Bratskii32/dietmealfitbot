@@ -2,6 +2,8 @@ import { Router, Response } from 'express';
 import {
   getLatestPlan,
   insertPlan,
+  getArchivedPlans,
+  getArchivedPlan,
   updateUserLastPlanRefresh,
   parseAllergies,
   updateMealInPlan,
@@ -78,7 +80,7 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
     const days = isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS;
     const plan = await generateMealPlan(profile, days);
 
-    await insertPlan(req.telegramId!, JSON.stringify(plan));
+    await insertPlan(req.telegramId!, JSON.stringify(plan), isPremium);
     await logEvent(req.telegramId!, 'plan_generated');
     if (isPremium) {
       await updateUserLastPlanRefresh(req.telegramId!, getToday());
@@ -213,6 +215,45 @@ router.get('/refresh-status', async (req: AuthRequest, res: Response) => {
     canRefresh: isPremium,
     isPremium,
     maxDays: isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS,
+  });
+});
+
+router.get('/history', async (req: AuthRequest, res: Response) => {
+  const { isPremium } = await resolvePremiumUser(req.telegramId!);
+  if (!isPremium) {
+    return res.status(403).json({
+      error: 'premium_required',
+      message: 'История рационов доступна в Premium',
+    });
+  }
+
+  const plans = await getArchivedPlans(req.telegramId!);
+  res.json({ plans });
+});
+
+router.get('/history/:id', async (req: AuthRequest, res: Response) => {
+  const { isPremium } = await resolvePremiumUser(req.telegramId!);
+  if (!isPremium) {
+    return res.status(403).json({
+      error: 'premium_required',
+      message: 'История рационов доступна в Premium',
+    });
+  }
+
+  const planId = parseInt(String(req.params.id), 10);
+  if (!planId) {
+    return res.status(400).json({ error: 'Некорректный id' });
+  }
+
+  const archived = await getArchivedPlan(req.telegramId!, planId);
+  if (!archived) {
+    return res.status(404).json({ error: 'Рацион не найден' });
+  }
+
+  const fullPlan = JSON.parse(archived.plan_data) as WeekPlan;
+  res.json({
+    plan: fullPlan,
+    createdAt: archived.created_at,
   });
 });
 

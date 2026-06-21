@@ -98,6 +98,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS cooking_time TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences_prompted BOOLEAN DEFAULT FALSE;
 ALTER TABLE week_plans ADD COLUMN IF NOT EXISTS shopping_list TEXT;
 ALTER TABLE week_plans ADD COLUMN IF NOT EXISTS shopping_list_generated_at TIMESTAMPTZ;
+ALTER TABLE week_plans ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_week_plans_active ON week_plans(telegram_id, is_archived, created_at DESC);
+UPDATE week_plans wp SET is_archived = TRUE
+WHERE id NOT IN (
+  SELECT DISTINCT ON (telegram_id) id FROM week_plans ORDER BY telegram_id, created_at DESC
+) AND (is_archived = FALSE OR is_archived IS NULL);
 `;
 
 export async function initSchema(): Promise<void> {

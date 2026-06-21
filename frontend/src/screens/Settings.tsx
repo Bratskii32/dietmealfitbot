@@ -10,6 +10,7 @@ interface Props {
   subscriptionCancelled?: boolean;
   onSubscriptionChange?: () => void;
   onConfigureRation?: () => void;
+  onOpenPlanHistory?: () => void;
 }
 
 export function Settings({
@@ -19,6 +20,7 @@ export function Settings({
   subscriptionCancelled,
   onSubscriptionChange,
   onConfigureRation,
+  onOpenPlanHistory,
 }: Props) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -80,6 +82,14 @@ export function Settings({
         onClick={onConfigureRation}
       >
         ⚙️ Настроить рацион
+      </button>
+
+      <button
+        className="card"
+        style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }}
+        onClick={onOpenPlanHistory}
+      >
+        📚 История рационов
       </button>
 
       <button className="card" style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }} onClick={onShowPaywall}>

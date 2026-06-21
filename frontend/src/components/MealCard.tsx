@@ -15,6 +15,7 @@ interface Props {
   onRecipeClick: () => void;
   onReplace: () => void;
   onShowPaywall: () => void;
+  readOnly?: boolean;
 }
 
 export function MealCard({
@@ -24,6 +25,7 @@ export function MealCard({
   onRecipeClick,
   onReplace,
   onShowPaywall,
+  readOnly = false,
 }: Props) {
   const handleReplace = () => {
     if (!isPremium) {
@@ -57,12 +59,14 @@ export function MealCard({
         >
           Рецепт →
         </button>
-        <button
-          onClick={handleReplace}
-          style={{ background: 'none', color: isPremium ? 'var(--primary)' : 'var(--text-secondary)', fontSize: 15, fontWeight: 600, padding: 0 }}
-        >
-          Заменить 🔄
-        </button>
+        {!readOnly && (
+          <button
+            onClick={handleReplace}
+            style={{ background: 'none', color: isPremium ? 'var(--primary)' : 'var(--text-secondary)', fontSize: 15, fontWeight: 600, padding: 0 }}
+          >
+            Заменить 🔄
+          </button>
+        )}
       </div>
     </div>
   );

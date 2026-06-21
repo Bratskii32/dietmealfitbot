@@ -123,7 +123,7 @@ router.post('/preferences', async (req: AuthRequest, res: Response) => {
     });
     const days = isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS;
     const plan = await generateMealPlan(profile, days);
-    await insertPlan(req.telegramId!, JSON.stringify(plan));
+    await insertPlan(req.telegramId!, JSON.stringify(plan), isPremium);
     await markPreferencesPrompted(req.telegramId!);
     await logEvent(req.telegramId!, 'plan_generated');
 

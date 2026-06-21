@@ -9,6 +9,7 @@ import { RecipeDetail } from './screens/RecipeDetail';
 import { Progress } from './screens/Progress';
 import { Settings } from './screens/Settings';
 import { Paywall } from './screens/Paywall';
+import { PlanHistory } from './screens/PlanHistory';
 import { PreferencesSheet } from './components/PreferencesSheet';
 import { Navigation } from './components/Navigation';
 import { Screen, Recipe, WeekPlan } from './types';
@@ -30,6 +31,7 @@ export default function App() {
   const [eatingStyle, setEatingStyle] = useState<string | null>(null);
   const [cookingTime, setCookingTime] = useState<string | null>(null);
   const [showPreferences, setShowPreferences] = useState(false);
+  const [showPlanHistory, setShowPlanHistory] = useState(false);
   const [planVersion, setPlanVersion] = useState(0);
 
   useEffect(() => {
@@ -115,6 +117,17 @@ export default function App() {
     );
   }
 
+  if (showPlanHistory) {
+    return (
+      <div className="app-container">
+        <PlanHistory
+          onClose={() => setShowPlanHistory(false)}
+          onRecipeSelect={setSelectedRecipe}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       {screen === 'home' && (
@@ -141,6 +154,10 @@ export default function App() {
           onShowPaywall={() => setShowPaywall(true)}
           onSubscriptionChange={loadSubscription}
           onConfigureRation={() => setShowPreferences(true)}
+          onOpenPlanHistory={() => {
+            if (isPremium) setShowPlanHistory(true);
+            else setShowPaywall(true);
+          }}
         />
       )}
 

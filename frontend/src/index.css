@@ -279,6 +279,12 @@ input, select {
   border-radius: 20px 20px 0 0;
 }
 
+.modal-bottom-scroll {
+  max-height: 85vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .pull-indicator {
   text-align: center;
   font-size: 13px;

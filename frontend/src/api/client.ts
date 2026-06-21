@@ -90,6 +90,12 @@ export const api = {
 
   getRefreshStatus: () => request<{ canRefresh: boolean; isPremium: boolean; maxDays: number }>('/plan/refresh-status'),
 
+  getPlanHistory: () =>
+    request<{ plans: { id: number; createdAt: string }[] }>('/plan/history'),
+
+  getArchivedPlan: (id: number) =>
+    request<{ plan: import('../types').WeekPlan; createdAt: string }>(`/plan/history/${id}`),
+
   getDailyStatus: () => request<{ status: string }>('/home/status'),
 
   getWhatToEatStatus: () =>

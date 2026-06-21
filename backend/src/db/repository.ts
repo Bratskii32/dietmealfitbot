@@ -273,7 +273,8 @@ export async function getLatestPlan(telegramId: string): Promise<WeekPlanRow | u
     shopping_list_generated_at: Date | null;
   }>(
     `SELECT id, telegram_id, plan_data, created_at, shopping_list, shopping_list_generated_at
-     FROM week_plans WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 1`,
+     FROM week_plans WHERE telegram_id = $1 AND (is_archived = FALSE OR is_archived IS NULL)
+     ORDER BY created_at DESC LIMIT 1`,
     [telegramId]
   );
   if (!rows[0]) return undefined;
@@ -287,11 +288,45 @@ export async function getLatestPlan(telegramId: string): Promise<WeekPlanRow | u
   };
 }
 
-export async function insertPlan(telegramId: string, planData: string): Promise<void> {
+export async function insertPlan(telegramId: string, planData: string, isPremium: boolean): Promise<void> {
+  if (isPremium) {
+    await query(
+      'UPDATE week_plans SET is_archived = TRUE WHERE telegram_id = $1 AND (is_archived = FALSE OR is_archived IS NULL)',
+      [telegramId]
+    );
+  } else {
+    await query('DELETE FROM week_plans WHERE telegram_id = $1', [telegramId]);
+  }
   await query(
-    'INSERT INTO week_plans (telegram_id, plan_data, shopping_list, shopping_list_generated_at) VALUES ($1, $2, NULL, NULL)',
+    'INSERT INTO week_plans (telegram_id, plan_data, shopping_list, shopping_list_generated_at, is_archived) VALUES ($1, $2, NULL, NULL, FALSE)',
     [telegramId, planData]
   );
+}
+
+export async function getArchivedPlans(telegramId: string): Promise<{ id: number; createdAt: string }[]> {
+  const { rows } = await query<{ id: number; created_at: Date }>(
+    `SELECT id, created_at FROM week_plans
+     WHERE telegram_id = $1 AND is_archived = TRUE
+     ORDER BY created_at DESC`,
+    [telegramId]
+  );
+  return rows.map((r) => ({ id: r.id, createdAt: r.created_at.toISOString() }));
+}
+
+export async function getArchivedPlan(
+  telegramId: string,
+  planId: number
+): Promise<{ plan_data: string; created_at: string } | undefined> {
+  const { rows } = await query<{ plan_data: unknown; created_at: Date }>(
+    `SELECT plan_data, created_at FROM week_plans
+     WHERE id = $1 AND telegram_id = $2 AND is_archived = TRUE`,
+    [planId, telegramId]
+  );
+  if (!rows[0]) return undefined;
+  return {
+    plan_data: typeof rows[0].plan_data === 'string' ? rows[0].plan_data : JSON.stringify(rows[0].plan_data),
+    created_at: rows[0].created_at.toISOString(),
+  };
 }
 
 export async function saveShoppingList(planId: number, list: string): Promise<void> {
@@ -457,7 +492,8 @@ export async function getUsersWithPlansForReminders(): Promise<
     `SELECT u.telegram_id, u.name, u.first_name, wp.plan_data, wp.created_at AS plan_created_at
      FROM users u
      INNER JOIN LATERAL (
-       SELECT plan_data, created_at FROM week_plans WHERE telegram_id = u.telegram_id
+       SELECT plan_data, created_at FROM week_plans
+       WHERE telegram_id = u.telegram_id AND (is_archived = FALSE OR is_archived IS NULL)
        ORDER BY created_at DESC LIMIT 1
      ) wp ON TRUE
      WHERE u.notifications_enabled = TRUE AND u.onboarding_complete = TRUE`
