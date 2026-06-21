@@ -106,6 +106,10 @@ export function initBot(): TelegramBot | null {
     await bot.sendMessage(msg.chat.id, HELP_MESSAGE);
   });
 
+  bot.onText(/\/appss_verify/, async (msg) => {
+    await bot.sendMessage(msg.chat.id, 'appss_46a816');
+  });
+
   bot.on('callback_query', async (query) => {
     if (!query.message || !query.from) return;
     const chatId = query.message.chat.id;
