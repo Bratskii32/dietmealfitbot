@@ -8,12 +8,14 @@ import {
   incrementWeeklyChat,
   getWeeklyQueryCount,
   logEvent,
+  saveShoppingList,
 } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { generateMealPlan, suggestMealReplacement, generateShoppingList, WeekPlan } from '../services/claude.js';
 import { FREEMIUM } from '../config/freemium.js';
 import { resolvePremiumUser } from '../services/premium.js';
 import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
+import { buildUserProfile } from '../services/userProfile.js';
 
 const router = Router();
 const WEEKLY_LIMIT = FREEMIUM.FREE_CHAT_WEEKLY;
@@ -71,17 +73,7 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const profile = {
-      name: user.name,
-      age: user.age,
-      gender: user.gender,
-      height: user.height,
-      weight: user.weight,
-      goal: user.goal,
-      activityLevel: user.activity_level,
-      mealsPerDay: user.meals_per_day,
-      allergies: parseAllergies(user),
-    };
+    const profile = buildUserProfile(user);
 
     const days = isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS;
     const plan = await generateMealPlan(profile, days);
@@ -160,8 +152,24 @@ router.post('/replace', async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/shopping-list', async (req: AuthRequest, res: Response) => {
+  const { refresh } = req.body as { refresh?: boolean };
   const { isPremium } = await resolvePremiumUser(req.telegramId!);
   const used = await getWeeklyQueryCount(req.telegramId!);
+
+  const planRow = await getLatestPlan(req.telegramId!);
+  if (!planRow) {
+    return res.status(404).json({ error: 'Рацион не найден' });
+  }
+
+  if (!refresh && planRow.shopping_list) {
+    return res.json({
+      list: planRow.shopping_list,
+      cached: true,
+      remaining: isPremium ? -1 : Math.max(0, WEEKLY_LIMIT - used),
+      limit: WEEKLY_LIMIT,
+      isPremium,
+    });
+  }
 
   if (!isPremium && used >= WEEKLY_LIMIT) {
     return res.status(429).json({
@@ -172,14 +180,10 @@ router.post('/shopping-list', async (req: AuthRequest, res: Response) => {
     });
   }
 
-  const planRow = await getLatestPlan(req.telegramId!);
-  if (!planRow) {
-    return res.status(404).json({ error: 'Рацион не найден' });
-  }
-
   try {
     const fullPlan = JSON.parse(planRow.plan_data) as WeekPlan;
     const list = await generateShoppingList(fullPlan);
+    await saveShoppingList(planRow.id, list);
 
     let newUsed = used;
     if (!isPremium) {
@@ -188,6 +192,7 @@ router.post('/shopping-list', async (req: AuthRequest, res: Response) => {
 
     res.json({
       list,
+      cached: false,
       remaining: isPremium ? -1 : Math.max(0, WEEKLY_LIMIT - newUsed),
       limit: WEEKLY_LIMIT,
       isPremium,

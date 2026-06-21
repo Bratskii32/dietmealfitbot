@@ -5,12 +5,23 @@ import {
   updateLastSeen,
   setNotificationsEnabled,
   logEvent,
+  saveMealPreferences,
+  markPreferencesPrompted,
+  insertPlan,
 } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { FREEMIUM } from '../config/freemium.js';
 import { resolvePremiumUser } from '../services/premium.js';
+import { buildUserProfile } from '../services/userProfile.js';
+import { generateMealPlan, WeekPlan } from '../services/claude.js';
+import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
 
 const router = Router();
+
+function filterPlanByTier(plan: WeekPlan, isPremium: boolean): WeekPlan {
+  const maxDays = isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS;
+  return { ...plan, days: plan.days.slice(0, maxDays) };
+}
 
 router.get('/me', async (req: AuthRequest, res: Response) => {
   const { user, isPremium } = await resolvePremiumUser(req.telegramId!);
@@ -38,6 +49,9 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
       onboardingComplete: !!user.onboarding_complete,
       maxDays: isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS,
       notificationsEnabled: user.notifications_enabled !== 0,
+      preferencesPrompted: !!user.preferences_prompted,
+      eatingStyle: user.eating_style || null,
+      cookingTime: user.cooking_time || null,
     },
   });
 });
@@ -66,6 +80,8 @@ router.get('/settings', async (req: AuthRequest, res: Response) => {
   const user = await resolvePremiumUser(req.telegramId!);
   res.json({
     notificationsEnabled: user.user?.notifications_enabled !== 0,
+    eatingStyle: user.user?.eating_style || null,
+    cookingTime: user.user?.cooking_time || null,
   });
 });
 
@@ -76,6 +92,59 @@ router.patch('/settings', async (req: AuthRequest, res: Response) => {
   }
   await setNotificationsEnabled(req.telegramId!, notificationsEnabled);
   res.json({ success: true, notificationsEnabled });
+});
+
+router.post('/preferences', async (req: AuthRequest, res: Response) => {
+  const { eatingStyle, cookingTime } = req.body as {
+    eatingStyle?: string | null;
+    cookingTime?: string | null;
+  };
+
+  const validStyles = ['quick', 'healthy', 'cooking', 'varied'];
+  const validTimes = ['quick', 'medium', 'long'];
+
+  if (eatingStyle && !validStyles.includes(eatingStyle)) {
+    return res.status(400).json({ error: 'Неверный стиль еды' });
+  }
+  if (cookingTime && !validTimes.includes(cookingTime)) {
+    return res.status(400).json({ error: 'Неверное время готовки' });
+  }
+
+  const { isPremium, user } = await resolvePremiumUser(req.telegramId!);
+  if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+  await saveMealPreferences(req.telegramId!, eatingStyle || null, cookingTime || null);
+
+  try {
+    const profile = buildUserProfile({
+      ...user,
+      eating_style: eatingStyle || undefined,
+      cooking_time: cookingTime || undefined,
+    });
+    const days = isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS;
+    const plan = await generateMealPlan(profile, days);
+    await insertPlan(req.telegramId!, JSON.stringify(plan));
+    await markPreferencesPrompted(req.telegramId!);
+    await logEvent(req.telegramId!, 'plan_generated');
+
+    res.json({
+      success: true,
+      plan: filterPlanByTier(plan, isPremium),
+      isPremium,
+      maxDays: days,
+    });
+  } catch (error) {
+    try {
+      handleClaudeError(error);
+    } catch {
+      return serviceUnavailableResponse(res);
+    }
+  }
+});
+
+router.post('/preferences/skip', async (req: AuthRequest, res: Response) => {
+  await markPreferencesPrompted(req.telegramId!);
+  res.json({ success: true });
 });
 
 const CLIENT_EVENTS = ['paywall_shown'] as const;

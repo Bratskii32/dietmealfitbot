@@ -9,8 +9,9 @@ import { RecipeDetail } from './screens/RecipeDetail';
 import { Progress } from './screens/Progress';
 import { Settings } from './screens/Settings';
 import { Paywall } from './screens/Paywall';
+import { PreferencesSheet } from './components/PreferencesSheet';
 import { Navigation } from './components/Navigation';
-import { Screen, Recipe } from './types';
+import { Screen, Recipe, WeekPlan } from './types';
 
 type AppState = 'loading' | 'onboarding' | 'app';
 
@@ -25,6 +26,11 @@ export default function App() {
   const [isPremium, setIsPremium] = useState(false);
   const [premiumExpiresAt, setPremiumExpiresAt] = useState<string | null>(null);
   const [subscriptionCancelled, setSubscriptionCancelled] = useState(false);
+  const [preferencesPrompted, setPreferencesPrompted] = useState(true);
+  const [eatingStyle, setEatingStyle] = useState<string | null>(null);
+  const [cookingTime, setCookingTime] = useState<string | null>(null);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [planVersion, setPlanVersion] = useState(0);
 
   useEffect(() => {
     if (!isReady) return;
@@ -48,6 +54,9 @@ export default function App() {
         setUserName(data.user.name || user?.first_name || 'друг');
         setIsPremium(data.user.isPremium);
         setDaysAway(data.daysAway || 0);
+        setPreferencesPrompted(!!data.user.preferencesPrompted);
+        setEatingStyle(data.user.eatingStyle || null);
+        setCookingTime(data.user.cookingTime || null);
         setAppState('app');
       } else {
         setAppState('onboarding');
@@ -59,7 +68,9 @@ export default function App() {
 
   const handleOnboardingComplete = () => {
     setUserName(user?.first_name || 'друг');
+    setPreferencesPrompted(false);
     loadSubscription();
+    checkUser();
     setAppState('app');
   };
 
@@ -68,8 +79,13 @@ export default function App() {
     loadSubscription();
   };
 
-  const handleShowPaywall = () => {
-    setShowPaywall(true);
+  const handlePreferencesSaved = (_plan: WeekPlan) => {
+    setPreferencesPrompted(true);
+    setPlanVersion((v) => v + 1);
+  };
+
+  const handlePreferencesSkip = () => {
+    setPreferencesPrompted(true);
   };
 
   if (appState === 'loading') {
@@ -106,12 +122,15 @@ export default function App() {
           userName={userName}
           isPremium={isPremium}
           daysAway={daysAway}
+          preferencesPrompted={preferencesPrompted}
+          planVersion={planVersion}
           onNavigate={setScreen}
           onRecipeSelect={setSelectedRecipe}
-          onShowPaywall={handleShowPaywall}
+          onShowPaywall={() => setShowPaywall(true)}
+          onOpenPreferences={() => setShowPreferences(true)}
         />
       )}
-      {screen === 'chat' && <Chat onShowPaywall={handleShowPaywall} />}
+      {screen === 'chat' && <Chat onShowPaywall={() => setShowPaywall(true)} />}
       {screen === 'recipes' && <Recipes onRecipeSelect={setSelectedRecipe} />}
       {screen === 'progress' && <Progress />}
       {screen === 'settings' && (
@@ -119,8 +138,9 @@ export default function App() {
           isPremium={isPremium}
           premiumExpiresAt={premiumExpiresAt}
           subscriptionCancelled={subscriptionCancelled}
-          onShowPaywall={handleShowPaywall}
+          onShowPaywall={() => setShowPaywall(true)}
           onSubscriptionChange={loadSubscription}
+          onConfigureRation={() => setShowPreferences(true)}
         />
       )}
 
@@ -131,6 +151,17 @@ export default function App() {
           onClose={handleClosePaywall}
           isPremium={isPremium}
           premiumExpiresAt={premiumExpiresAt}
+        />
+      )}
+
+      {showPreferences && (
+        <PreferencesSheet
+          initialEatingStyle={eatingStyle}
+          initialCookingTime={cookingTime}
+          onClose={() => setShowPreferences(false)}
+          onSaved={handlePreferencesSaved}
+          onSkip={handlePreferencesSkip}
+          showSkip={!preferencesPrompted}
         />
       )}
     </div>

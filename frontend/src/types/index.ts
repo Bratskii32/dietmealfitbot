@@ -12,7 +12,10 @@ export interface User {
   isPremium: boolean;
   onboardingComplete: boolean;
   maxDays?: number;
-  notificationsEnabled?: boolean;
+      notificationsEnabled?: boolean;
+  preferencesPrompted?: boolean;
+  eatingStyle?: string | null;
+  cookingTime?: string | null;
 }
 
 export interface Recipe {

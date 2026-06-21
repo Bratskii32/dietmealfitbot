@@ -1,9 +1,11 @@
 interface Props {
   list: string;
+  loading?: boolean;
   onClose: () => void;
+  onRefresh: () => void;
 }
 
-export function ShoppingListModal({ list, onClose }: Props) {
+export function ShoppingListModal({ list, loading, onClose, onRefresh }: Props) {
   const copyList = async () => {
     try {
       await navigator.clipboard.writeText(list);
@@ -22,7 +24,15 @@ export function ShoppingListModal({ list, onClose }: Props) {
         }}>
           {list}
         </div>
-        <button className="btn-primary" onClick={copyList}>Скопировать список</button>
+        <button className="btn-primary" onClick={copyList}>📋 Скопировать список</button>
+        <button
+          className="btn-secondary"
+          style={{ marginTop: 10 }}
+          onClick={onRefresh}
+          disabled={loading}
+        >
+          {loading ? '⏳ Обновляю...' : '🔄 Обновить список'}
+        </button>
         <button className="btn-secondary" style={{ marginTop: 10 }} onClick={onClose}>Закрыть</button>
       </div>
     </div>

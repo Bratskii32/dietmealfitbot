@@ -40,7 +40,11 @@ export const api = {
   saveOnboarding: (data: Record<string, unknown>) =>
     request('/user/onboarding', { method: 'POST', body: JSON.stringify(data) }),
 
-  getSettings: () => request<{ notificationsEnabled: boolean }>('/user/settings'),
+  getSettings: () => request<{
+    notificationsEnabled: boolean;
+    eatingStyle?: string | null;
+    cookingTime?: string | null;
+  }>('/user/settings'),
 
   updateSettings: (notificationsEnabled: boolean) =>
     request('/user/settings', {
@@ -64,10 +68,18 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ upgrade }) }
     ),
 
-  getShoppingList: () =>
-    request<{ list: string; remaining: number; limit: number; isPremium: boolean }>(
+  savePreferences: (eatingStyle: string | null, cookingTime: string | null) =>
+    request<{ success: boolean; plan: import('../types').WeekPlan; isPremium: boolean; maxDays: number }>(
+      '/user/preferences',
+      { method: 'POST', body: JSON.stringify({ eatingStyle, cookingTime }) }
+    ),
+
+  skipPreferences: () => request('/user/preferences/skip', { method: 'POST' }),
+
+  getShoppingList: (refresh = false) =>
+    request<{ list: string; cached?: boolean; remaining: number; limit: number; isPremium: boolean }>(
       '/plan/shopping-list',
-      { method: 'POST' }
+      { method: 'POST', body: JSON.stringify({ refresh }) }
     ),
 
   replaceMeal: (dayNumber: number, mealType: string, recipeName: string) =>

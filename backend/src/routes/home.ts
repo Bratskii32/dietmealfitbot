@@ -10,43 +10,55 @@ import { AuthRequest } from '../middleware/auth.js';
 import { resolvePremiumUser } from '../services/premium.js';
 import { FREEMIUM } from '../config/freemium.js';
 import {
-  generateDailyStatus,
+  generateLiveGreeting,
+  getDefaultLiveGreeting,
+  getMoscowHour,
+  getTimeOfDayLabel,
   suggestWhatToEat,
-  WeekPlan,
 } from '../services/claude.js';
 import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
 
 const router = Router();
 
-function getToday(): string {
-  return new Date().toISOString().split('T')[0];
+const DAY_NAMES = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+
+function getTodayMoscow(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date());
 }
 
-function getTodayCalories(plan: WeekPlan | null): number {
-  if (!plan?.days?.[0]?.meals) return 0;
-  return plan.days[0].meals.reduce((s, m) => s + (m.recipe.calories || 0), 0);
+function getMoscowDayOfWeek(): string {
+  const dayIndex = new Date(
+    new Date().toLocaleString('en-US', { timeZone: 'Europe/Moscow' })
+  ).getDay();
+  return DAY_NAMES[dayIndex];
 }
 
 router.get('/status', async (req: AuthRequest, res: Response) => {
   const { user } = await resolvePremiumUser(req.telegramId!);
   if (!user) return res.json({ status: '' });
 
-  const today = getToday();
+  const today = getTodayMoscow();
   if (user.daily_status && user.daily_status_date === today) {
     return res.json({ status: user.daily_status });
   }
 
-  const planRow = await getLatestPlan(req.telegramId!);
-  const plan = planRow ? (JSON.parse(planRow.plan_data) as WeekPlan) : null;
-  const todayCalories = getTodayCalories(plan);
-  const dailyNorm = plan?.dailyCalories || 2000;
+  const hour = getMoscowHour();
+  const timeOfDay = getTimeOfDayLabel(hour);
+  const name = user.name || user.first_name || 'друг';
 
   try {
-    const status = await generateDailyStatus(user.goal || 'maintain', todayCalories, dailyNorm);
+    const status = await generateLiveGreeting({
+      name,
+      goal: user.goal || 'maintain',
+      dayOfWeek: getMoscowDayOfWeek(),
+      timeOfDay,
+    });
     await setDailyStatus(req.telegramId!, status, today);
     res.json({ status });
   } catch {
-    res.json({ status: '🥗 Следуй своему рациону сегодня' });
+    const fallback = getDefaultLiveGreeting(name, timeOfDay);
+    await setDailyStatus(req.telegramId!, fallback, today);
+    res.json({ status: fallback });
   }
 });
 
@@ -90,8 +102,10 @@ router.post('/what-to-eat', async (req: AuthRequest, res: Response) => {
       activityLevel: user.activity_level,
       mealsPerDay: user.meals_per_day,
       allergies: parseAllergies(user),
+      eatingStyle: user.eating_style || null,
+      cookingTime: user.cooking_time || null,
     };
-    const hour = new Date().getHours();
+    const hour = getMoscowHour();
     const suggestion = await suggestWhatToEat(profile, hour);
 
     let newUsed = used;

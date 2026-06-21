@@ -9,6 +9,7 @@ interface Props {
   premiumExpiresAt?: string | null;
   subscriptionCancelled?: boolean;
   onSubscriptionChange?: () => void;
+  onConfigureRation?: () => void;
 }
 
 export function Settings({
@@ -17,6 +18,7 @@ export function Settings({
   premiumExpiresAt,
   subscriptionCancelled,
   onSubscriptionChange,
+  onConfigureRation,
 }: Props) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -71,6 +73,14 @@ export function Settings({
           </div>
         </div>
       )}
+
+      <button
+        className="card"
+        style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }}
+        onClick={onConfigureRation}
+      >
+        ⚙️ Настроить рацион
+      </button>
 
       <button className="card" style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }} onClick={onShowPaywall}>
         ⭐ {isPremium ? 'Продлить подписку' : 'Управление подпиской'}

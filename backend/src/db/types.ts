@@ -25,6 +25,9 @@ export interface UserRow {
   pdf_gift_sent?: number;
   last_plan_refresh?: string;
   notifications_enabled?: number;
+  eating_style?: string;
+  cooking_time?: string;
+  preferences_prompted?: number;
   last_seen_at?: string;
   created_at?: string;
   updated_at?: string;
@@ -35,6 +38,8 @@ export interface WeekPlanRow {
   telegram_id: string;
   plan_data: string;
   created_at: string;
+  shopping_list?: string;
+  shopping_list_generated_at?: string;
 }
 
 export interface ChatMessageRow {

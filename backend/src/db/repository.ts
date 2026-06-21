@@ -28,6 +28,9 @@ type DbUser = {
   pdf_gift_sent: boolean;
   last_plan_refresh: string | null;
   notifications_enabled: boolean;
+  eating_style: string | null;
+  cooking_time: string | null;
+  preferences_prompted: boolean;
   last_seen_at: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -65,6 +68,9 @@ function mapUser(row: DbUser): UserRow {
     pdf_gift_sent: boolToInt(row.pdf_gift_sent),
     last_plan_refresh: row.last_plan_refresh ?? undefined,
     notifications_enabled: boolToInt(row.notifications_enabled ?? true),
+    eating_style: row.eating_style ?? undefined,
+    cooking_time: row.cooking_time ?? undefined,
+    preferences_prompted: boolToInt(row.preferences_prompted ?? false),
     last_seen_at: row.last_seen_at?.toISOString(),
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
@@ -258,9 +264,16 @@ export async function updateMealInPlan(
 }
 
 export async function getLatestPlan(telegramId: string): Promise<WeekPlanRow | undefined> {
-  const { rows } = await query<{ id: number; telegram_id: string; plan_data: unknown; created_at: Date }>(
-    `SELECT id, telegram_id, plan_data, created_at FROM week_plans
-     WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 1`,
+  const { rows } = await query<{
+    id: number;
+    telegram_id: string;
+    plan_data: unknown;
+    created_at: Date;
+    shopping_list: string | null;
+    shopping_list_generated_at: Date | null;
+  }>(
+    `SELECT id, telegram_id, plan_data, created_at, shopping_list, shopping_list_generated_at
+     FROM week_plans WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT 1`,
     [telegramId]
   );
   if (!rows[0]) return undefined;
@@ -269,13 +282,41 @@ export async function getLatestPlan(telegramId: string): Promise<WeekPlanRow | u
     telegram_id: rows[0].telegram_id,
     plan_data: typeof rows[0].plan_data === 'string' ? rows[0].plan_data : JSON.stringify(rows[0].plan_data),
     created_at: rows[0].created_at.toISOString(),
+    shopping_list: rows[0].shopping_list ?? undefined,
+    shopping_list_generated_at: rows[0].shopping_list_generated_at?.toISOString(),
   };
 }
 
 export async function insertPlan(telegramId: string, planData: string): Promise<void> {
-  await query('INSERT INTO week_plans (telegram_id, plan_data) VALUES ($1, $2)', [
-    telegramId, planData,
-  ]);
+  await query(
+    'INSERT INTO week_plans (telegram_id, plan_data, shopping_list, shopping_list_generated_at) VALUES ($1, $2, NULL, NULL)',
+    [telegramId, planData]
+  );
+}
+
+export async function saveShoppingList(planId: number, list: string): Promise<void> {
+  await query(
+    'UPDATE week_plans SET shopping_list = $2, shopping_list_generated_at = NOW() WHERE id = $1',
+    [planId, list]
+  );
+}
+
+export async function saveMealPreferences(
+  telegramId: string,
+  eatingStyle: string | null,
+  cookingTime: string | null
+): Promise<void> {
+  await query(
+    'UPDATE users SET eating_style = $2, cooking_time = $3, updated_at = $4 WHERE telegram_id = $1',
+    [telegramId, eatingStyle, cookingTime, now()]
+  );
+}
+
+export async function markPreferencesPrompted(telegramId: string): Promise<void> {
+  await query(
+    'UPDATE users SET preferences_prompted = TRUE, updated_at = $2 WHERE telegram_id = $1',
+    [telegramId, now()]
+  );
 }
 
 export async function updateUserLastPlanRefresh(telegramId: string, date: string): Promise<void> {
@@ -398,18 +439,25 @@ export async function setNotificationsEnabled(telegramId: string, enabled: boole
 }
 
 export async function getUsersWithPlansForReminders(): Promise<
-  { telegram_id: string; name: string; first_name: string | null; plan_data: unknown }[]
+  {
+    telegram_id: string;
+    name: string;
+    first_name: string | null;
+    plan_data: unknown;
+    plan_created_at: string;
+  }[]
 > {
   const { rows } = await query<{
     telegram_id: string;
     name: string | null;
     first_name: string | null;
     plan_data: unknown;
+    plan_created_at: Date;
   }>(
-    `SELECT u.telegram_id, u.name, u.first_name, wp.plan_data
+    `SELECT u.telegram_id, u.name, u.first_name, wp.plan_data, wp.created_at AS plan_created_at
      FROM users u
      INNER JOIN LATERAL (
-       SELECT plan_data FROM week_plans WHERE telegram_id = u.telegram_id
+       SELECT plan_data, created_at FROM week_plans WHERE telegram_id = u.telegram_id
        ORDER BY created_at DESC LIMIT 1
      ) wp ON TRUE
      WHERE u.notifications_enabled = TRUE AND u.onboarding_complete = TRUE`
@@ -419,6 +467,7 @@ export async function getUsersWithPlansForReminders(): Promise<
     name: r.name || r.first_name || 'друг',
     first_name: r.first_name,
     plan_data: r.plan_data,
+    plan_created_at: r.plan_created_at.toISOString(),
   }));
 }
 

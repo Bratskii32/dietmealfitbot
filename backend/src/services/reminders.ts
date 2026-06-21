@@ -2,15 +2,9 @@ import cron from 'node-cron';
 import { getBot } from '../bot/instance.js';
 import { getUsersWithPlansForReminders } from '../db/repository.js';
 import { WeekPlan } from './claude.js';
+import { getPlanDayIndexForToday, getBreakfastForPlanDay } from './planDay.js';
 
 const frontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173';
-
-function getTodayBreakfast(plan: WeekPlan): { name: string; calories: number } | null {
-  const day = plan.days?.[0];
-  const breakfast = day?.meals?.find((m) => m.type === 'breakfast');
-  if (!breakfast?.recipe) return null;
-  return { name: breakfast.recipe.name, calories: breakfast.recipe.calories || 0 };
-}
 
 async function sendMorningReminders() {
   const bot = getBot();
@@ -22,7 +16,11 @@ async function sendMorningReminders() {
       const plan = (typeof user.plan_data === 'string'
         ? JSON.parse(user.plan_data)
         : user.plan_data) as WeekPlan;
-      const breakfast = getTodayBreakfast(plan);
+
+      const dayIndex = getPlanDayIndexForToday(user.plan_created_at, plan.days?.length || 0);
+      if (dayIndex === null) continue;
+
+      const breakfast = getBreakfastForPlanDay(plan, dayIndex);
       if (!breakfast) continue;
 
       await bot.sendMessage(
@@ -47,6 +45,13 @@ async function sendEveningReminders() {
   const users = await getUsersWithPlansForReminders();
   for (const user of users) {
     try {
+      const plan = (typeof user.plan_data === 'string'
+        ? JSON.parse(user.plan_data)
+        : user.plan_data) as WeekPlan;
+
+      const dayIndex = getPlanDayIndexForToday(user.plan_created_at, plan.days?.length || 0);
+      if (dayIndex === null) continue;
+
       await bot.sendMessage(
         Number(user.telegram_id),
         `🌙 Как прошёл день, ${user.name}?\nНе забудь отметить что поел в приложении!`,

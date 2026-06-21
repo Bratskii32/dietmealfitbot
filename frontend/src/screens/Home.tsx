@@ -12,9 +12,12 @@ interface Props {
   userName: string;
   isPremium: boolean;
   daysAway?: number;
+  preferencesPrompted?: boolean;
+  planVersion?: number;
   onNavigate: (screen: Screen) => void;
   onRecipeSelect: (recipe: Recipe) => void;
   onShowPaywall: () => void;
+  onOpenPreferences: () => void;
 }
 
 const DAY_NAMES = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
@@ -23,9 +26,12 @@ export function Home({
   userName,
   isPremium: isPremiumProp,
   daysAway = 0,
+  preferencesPrompted = true,
+  planVersion = 0,
   onNavigate,
   onRecipeSelect,
   onShowPaywall,
+  onOpenPreferences,
 }: Props) {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [dayIndex, setDayIndex] = useState(0);
@@ -34,11 +40,13 @@ export function Home({
   const [isPremium, setIsPremium] = useState(isPremiumProp);
   const [maxDays, setMaxDays] = useState(3);
   const [dailyStatus, setDailyStatus] = useState('');
+  const [statusLoading, setStatusLoading] = useState(true);
   const [snackRemaining, setSnackRemaining] = useState(3);
   const [snackSuggestion, setSnackSuggestion] = useState('');
   const [snackWarning, setSnackWarning] = useState('');
   const [snackLoading, setSnackLoading] = useState(false);
   const [shoppingLoading, setShoppingLoading] = useState(false);
+  const [shoppingRefreshing, setShoppingRefreshing] = useState(false);
   const [shoppingList, setShoppingList] = useState('');
   const [showWelcomeBack, setShowWelcomeBack] = useState(daysAway >= 3);
   const [toast, setToast] = useState<{ message: string; retry?: () => void } | null>(null);
@@ -49,7 +57,13 @@ export function Home({
 
   useEffect(() => {
     loadAll();
-  }, []);
+  }, [planVersion]);
+
+  useEffect(() => {
+    if (plan && !preferencesPrompted) {
+      onOpenPreferences();
+    }
+  }, [plan, preferencesPrompted, onOpenPreferences]);
 
   useEffect(() => {
     setIsPremium(isPremiumProp);
@@ -67,16 +81,15 @@ export function Home({
   const loadAll = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
+    setStatusLoading(true);
     try {
-      const [planData, statusData, snackStatus] = await Promise.all([
+      const [planData, snackStatus] = await Promise.all([
         api.getPlan(),
-        api.getDailyStatus(),
         api.getWhatToEatStatus(),
       ]);
       setPlan(planData.plan);
       setIsPremium(planData.isPremium);
       setMaxDays(planData.maxDays);
-      setDailyStatus(statusData.status);
       if (!planData.isPremium) {
         setSnackRemaining(snackStatus.remaining);
       }
@@ -86,6 +99,15 @@ export function Home({
       setLoading(false);
       setRefreshing(false);
       setPullDistance(0);
+    }
+
+    try {
+      const statusData = await api.getDailyStatus();
+      setDailyStatus(statusData.status);
+    } catch {
+      setDailyStatus('');
+    } finally {
+      setStatusLoading(false);
     }
   }, []);
 
@@ -114,20 +136,22 @@ export function Home({
     }
   };
 
-  const handleShoppingList = async () => {
-    setShoppingLoading(true);
+  const handleShoppingList = async (refresh = false) => {
+    if (refresh) setShoppingRefreshing(true);
+    else setShoppingLoading(true);
     try {
-      const data = await api.getShoppingList();
+      const data = await api.getShoppingList(refresh);
       setShoppingList(data.list);
     } catch (err: unknown) {
       const e = err as { error?: string; status?: number };
       if (e.error === 'premium_required' || e.status === 429) {
         onShowPaywall();
       } else {
-        showError(err, handleShoppingList);
+        showError(err, () => handleShoppingList(refresh));
       }
     } finally {
       setShoppingLoading(false);
+      setShoppingRefreshing(false);
     }
   };
 
@@ -266,9 +290,11 @@ export function Home({
         )}
       </div>
 
-      {dailyStatus && (
+      {statusLoading ? (
+        <div className="skeleton skeleton-text" style={{ width: '85%', height: 16, marginBottom: 12 }} />
+      ) : dailyStatus ? (
         <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>{dailyStatus}</p>
-      )}
+      ) : null}
 
       <button
         onClick={handleWhatToEat}
@@ -334,7 +360,7 @@ export function Home({
       <button
         className="btn-secondary"
         style={{ marginBottom: 12 }}
-        onClick={handleShoppingList}
+        onClick={() => handleShoppingList(false)}
         disabled={shoppingLoading}
       >
         {shoppingLoading ? '⏳ Составляю список...' : '🛒 Список покупок на неделю'}
@@ -347,7 +373,12 @@ export function Home({
       </div>
 
       {shoppingList && (
-        <ShoppingListModal list={shoppingList} onClose={() => setShoppingList('')} />
+        <ShoppingListModal
+          list={shoppingList}
+          loading={shoppingRefreshing}
+          onRefresh={() => handleShoppingList(true)}
+          onClose={() => setShoppingList('')}
+        />
       )}
 
       {toast && (

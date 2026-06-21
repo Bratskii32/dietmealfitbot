@@ -92,6 +92,15 @@ CREATE INDEX IF NOT EXISTS idx_advice_queries_telegram ON advice_queries(telegra
 CREATE INDEX IF NOT EXISTS idx_weekly_queries_telegram ON weekly_queries(telegram_id, week_start);
 `;
 
+const MIGRATIONS = `
+ALTER TABLE users ADD COLUMN IF NOT EXISTS eating_style TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS cooking_time TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences_prompted BOOLEAN DEFAULT FALSE;
+ALTER TABLE week_plans ADD COLUMN IF NOT EXISTS shopping_list TEXT;
+ALTER TABLE week_plans ADD COLUMN IF NOT EXISTS shopping_list_generated_at TIMESTAMPTZ;
+`;
+
 export async function initSchema(): Promise<void> {
   await query(SCHEMA);
+  await query(MIGRATIONS);
 }
