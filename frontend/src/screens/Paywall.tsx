@@ -73,6 +73,7 @@ export function Paywall({ onClose, isPremium, premiumExpiresAt }: Props) {
           <div>✓ Безлимитные AI-советы «Что съесть сейчас»</div>
           <div>✓ Безлимитный чат с диетологом</div>
           <div>✓ Полный рацион на 7 дней</div>
+          <div>✓ История всех твоих рационов</div>
           <div>✓ Замена любого блюда</div>
           <div>✓ Адаптация под тренировки</div>
         </div>
