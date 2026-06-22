@@ -523,8 +523,10 @@ export async function getAdminStats(): Promise<{
   today_registrations: number;
   conversion_rate: number;
   total_revenue: number;
+  registrations_last_7_days: { date: string; count: number }[];
+  recent_payments: { date: string; amount: number }[];
 }> {
-  const [users, premium, today, payments] = await Promise.all([
+  const [users, premium, today, payments, last7Days, recentPayments] = await Promise.all([
     query<{ count: string }>('SELECT COUNT(*)::text AS count FROM users'),
     query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM users
@@ -535,6 +537,19 @@ export async function getAdminStats(): Promise<{
     ),
     query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM events WHERE event_type = 'payment_completed'`
+    ),
+    query<{ day: Date; count: string }>(
+      `SELECT d.day::date AS day, COUNT(u.telegram_id)::text AS count
+       FROM generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, INTERVAL '1 day') AS d(day)
+       LEFT JOIN users u ON u.created_at::date = d.day::date
+       GROUP BY d.day
+       ORDER BY d.day`
+    ),
+    query<{ created_at: Date }>(
+      `SELECT created_at FROM events
+       WHERE event_type = 'payment_completed'
+       ORDER BY created_at DESC
+       LIMIT 10`
     ),
   ]);
 
@@ -549,6 +564,14 @@ export async function getAdminStats(): Promise<{
     today_registrations: todayCount,
     conversion_rate: total > 0 ? Math.round((premiumCount / total) * 10000) / 100 : 0,
     total_revenue: paymentCount * 299,
+    registrations_last_7_days: last7Days.rows.map((r) => ({
+      date: r.day.toISOString().split('T')[0],
+      count: parseInt(r.count, 10),
+    })),
+    recent_payments: recentPayments.rows.map((r) => ({
+      date: r.created_at.toISOString(),
+      amount: 299,
+    })),
   };
 }
 
