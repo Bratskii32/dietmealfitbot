@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import WebApp from '@twa-dev/sdk';
 import { api } from '../api/client';
 import { OFFER_URL, PRIVACY_URL } from '../constants/legal';
+import { ErrorToast } from '../components/ErrorToast';
 
 interface Props {
   onShowPaywall: () => void;
@@ -12,6 +13,16 @@ interface Props {
   onConfigureRation?: () => void;
   onOpenPlanHistory?: () => void;
 }
+
+const listButtonStyle: CSSProperties = {
+  width: '100%',
+  textAlign: 'left',
+  marginBottom: 10,
+  cursor: 'pointer',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+};
 
 export function Settings({
   onShowPaywall,
@@ -25,11 +36,12 @@ export function Settings({
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showSupportHint, setShowSupportHint] = useState(false);
+  const [showPromoModal, setShowPromoModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
-  const [promoMessage, setPromoMessage] = useState('');
   const [promoError, setPromoError] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     api.getSettings().then((s) => setNotificationsEnabled(s.notificationsEnabled)).catch(() => {});
@@ -56,6 +68,18 @@ export function Settings({
     } catch {
       setShowSupportHint(false);
     }
+  };
+
+  const openPromoModal = () => {
+    setPromoError('');
+    setShowPromoModal(true);
+  };
+
+  const closePromoModal = () => {
+    if (promoLoading) return;
+    setShowPromoModal(false);
+    setPromoError('');
+    setPromoCode('');
   };
 
   const toggleNotifications = async () => {
@@ -85,7 +109,6 @@ export function Settings({
     if (!promoCode.trim()) return;
     setPromoLoading(true);
     setPromoError('');
-    setPromoMessage('');
     try {
       const data = await api.activatePromo(promoCode.trim());
       const untilLabel = new Date(data.premiumUntil).toLocaleDateString('ru-RU', {
@@ -93,8 +116,10 @@ export function Settings({
         month: 'long',
         year: 'numeric',
       });
-      setPromoMessage(`Промокод активирован! Premium действует до ${untilLabel}.`);
+      setShowPromoModal(false);
       setPromoCode('');
+      setPromoError('');
+      setToast(`✅ Промокод активирован! Premium до ${untilLabel}`);
       onSubscriptionChange?.();
     } catch (err: unknown) {
       const e = err as { message?: string };
@@ -121,55 +146,34 @@ export function Settings({
         </div>
       )}
 
-      <button
-        className="card"
-        style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }}
-        onClick={onConfigureRation}
-      >
-        ⚙️ Настроить рацион
+      <button className="card" style={listButtonStyle} onClick={onConfigureRation}>
+        <span>⚙️ Настроить рацион</span>
+        <span style={{ color: 'var(--text-secondary)' }}>→</span>
       </button>
 
-      <button
-        className="card"
-        style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }}
-        onClick={onOpenPlanHistory}
-      >
-        📚 История рационов
+      <button className="card" style={listButtonStyle} onClick={onOpenPlanHistory}>
+        <span>📚 История рационов</span>
+        <span style={{ color: 'var(--text-secondary)' }}>→</span>
       </button>
 
-      <button className="card" style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }} onClick={onShowPaywall}>
-        ⭐ {isPremium ? 'Продлить подписку' : 'Управление подпиской'}
+      <button className="card" style={listButtonStyle} onClick={onShowPaywall}>
+        <span>⭐ {isPremium ? 'Продлить подписку' : 'Управление подпиской'}</span>
+        <span style={{ color: 'var(--text-secondary)' }}>→</span>
       </button>
 
-      <div className="card" style={{ marginBottom: 10 }}>
-        <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 15 }}>🎁 Промокод</div>
-        <input
-          type="text"
-          value={promoCode}
-          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-          placeholder="Введи промокод"
-          style={{ width: '100%', marginBottom: 10, textTransform: 'uppercase' }}
-        />
-        {promoError && <p className="error-text" style={{ marginBottom: 8 }}>{promoError}</p>}
-        {promoMessage && (
-          <p style={{ color: 'var(--primary)', fontSize: 14, marginBottom: 8 }}>{promoMessage}</p>
-        )}
-        <button
-          className="btn-primary"
-          onClick={handleActivatePromo}
-          disabled={promoLoading || !promoCode.trim()}
-        >
-          {promoLoading ? 'Активация...' : 'Активировать'}
-        </button>
-      </div>
+      <button className="card" style={listButtonStyle} onClick={openPromoModal}>
+        <span>🎟️ Ввести промокод</span>
+        <span style={{ color: 'var(--text-secondary)' }}>→</span>
+      </button>
 
       {isPremium && !subscriptionCancelled && (
         <button
           className="card"
-          style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer', color: 'var(--danger)' }}
+          style={{ ...listButtonStyle, color: 'var(--danger)' }}
           onClick={() => setShowCancelDialog(true)}
         >
-          Отменить подписку
+          <span>Отменить подписку</span>
+          <span style={{ color: 'var(--text-secondary)' }}>→</span>
         </button>
       )}
 
@@ -192,29 +196,63 @@ export function Settings({
         </button>
       </div>
 
-      <button
-        className="card"
-        style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }}
-        onClick={openSupport}
-      >
-        💬 Написать в поддержку
+      <button className="card" style={listButtonStyle} onClick={openSupport}>
+        <span>💬 Написать в поддержку</span>
+        <span style={{ color: 'var(--text-secondary)' }}>→</span>
       </button>
 
-      <button
-        className="card"
-        style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }}
-        onClick={() => openLink(OFFER_URL)}
-      >
-        📄 Публичная оферта
+      <button className="card" style={listButtonStyle} onClick={() => openLink(OFFER_URL)}>
+        <span>📄 Публичная оферта</span>
+        <span style={{ color: 'var(--text-secondary)' }}>→</span>
       </button>
 
-      <button
-        className="card"
-        style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }}
-        onClick={() => openLink(PRIVACY_URL)}
-      >
-        🔒 Политика конфиденциальности
+      <button className="card" style={listButtonStyle} onClick={() => openLink(PRIVACY_URL)}>
+        <span>🔒 Политика конфиденциальности</span>
+        <span style={{ color: 'var(--text-secondary)' }}>→</span>
       </button>
+
+      {showPromoModal && (
+        <div className="modal-overlay" onClick={closePromoModal}>
+          <div className="modal-content modal-bottom" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, marginBottom: 16 }}>Введи промокод</h3>
+            <input
+              type="text"
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+              placeholder="Например: VOTE7"
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                border: '2px solid var(--border)',
+                borderRadius: 12,
+                fontSize: 16,
+                marginBottom: 12,
+                textTransform: 'uppercase',
+              }}
+            />
+            {promoError && (
+              <p className="error-text" style={{ marginBottom: 12 }}>{promoError}</p>
+            )}
+            <button
+              className="btn-primary"
+              onClick={handleActivatePromo}
+              disabled={promoLoading || !promoCode.trim()}
+              style={{ background: '#4CAF50' }}
+            >
+              {promoLoading ? 'Активация...' : 'Активировать'}
+            </button>
+            <button
+              className="btn-secondary"
+              style={{ marginTop: 10 }}
+              onClick={closePromoModal}
+              disabled={promoLoading}
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
 
       {showSupportHint && (
         <div className="modal-overlay" onClick={() => setShowSupportHint(false)}>
@@ -249,6 +287,10 @@ export function Settings({
             </button>
           </div>
         </div>
+      )}
+
+      {toast && (
+        <ErrorToast message={toast} onClose={() => setToast(null)} />
       )}
     </div>
   );
