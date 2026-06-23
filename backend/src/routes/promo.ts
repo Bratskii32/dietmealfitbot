@@ -14,11 +14,16 @@ router.post('/activate', async (req: AuthRequest, res: Response) => {
   try {
     const result = await activatePromoCode(code.trim(), req.telegramId!);
     await notifyPromoActivated(req.telegramId!, result.days, result.premiumUntil);
+    const untilLabel = new Date(result.premiumUntil).toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
     res.json({
       success: true,
       days: result.days,
       premiumUntil: result.premiumUntil,
-      message: `Промокод активирован! +${result.days} дней Premium.`,
+      message: `Промокод активирован! Premium действует до ${untilLabel}.`,
     });
   } catch (err) {
     if (err instanceof PromoCodeError) {

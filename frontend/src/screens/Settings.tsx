@@ -88,7 +88,12 @@ export function Settings({
     setPromoMessage('');
     try {
       const data = await api.activatePromo(promoCode.trim());
-      setPromoMessage(data.message);
+      const untilLabel = new Date(data.premiumUntil).toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+      setPromoMessage(`Промокод активирован! Premium действует до ${untilLabel}.`);
       setPromoCode('');
       onSubscriptionChange?.();
     } catch (err: unknown) {
@@ -136,29 +141,27 @@ export function Settings({
         ⭐ {isPremium ? 'Продлить подписку' : 'Управление подпиской'}
       </button>
 
-      {!isPremium && (
-        <div className="card" style={{ marginBottom: 10 }}>
-          <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 15 }}>🎁 Промокод</div>
-          <input
-            type="text"
-            value={promoCode}
-            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-            placeholder="Введи промокод"
-            style={{ width: '100%', marginBottom: 10, textTransform: 'uppercase' }}
-          />
-          {promoError && <p className="error-text" style={{ marginBottom: 8 }}>{promoError}</p>}
-          {promoMessage && (
-            <p style={{ color: 'var(--primary)', fontSize: 14, marginBottom: 8 }}>{promoMessage}</p>
-          )}
-          <button
-            className="btn-primary"
-            onClick={handleActivatePromo}
-            disabled={promoLoading || !promoCode.trim()}
-          >
-            {promoLoading ? 'Активация...' : 'Активировать'}
-          </button>
-        </div>
-      )}
+      <div className="card" style={{ marginBottom: 10 }}>
+        <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 15 }}>🎁 Промокод</div>
+        <input
+          type="text"
+          value={promoCode}
+          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+          placeholder="Введи промокод"
+          style={{ width: '100%', marginBottom: 10, textTransform: 'uppercase' }}
+        />
+        {promoError && <p className="error-text" style={{ marginBottom: 8 }}>{promoError}</p>}
+        {promoMessage && (
+          <p style={{ color: 'var(--primary)', fontSize: 14, marginBottom: 8 }}>{promoMessage}</p>
+        )}
+        <button
+          className="btn-primary"
+          onClick={handleActivatePromo}
+          disabled={promoLoading || !promoCode.trim()}
+        >
+          {promoLoading ? 'Активация...' : 'Активировать'}
+        </button>
+      </div>
 
       {isPremium && !subscriptionCancelled && (
         <button
