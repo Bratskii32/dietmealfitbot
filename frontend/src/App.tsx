@@ -22,6 +22,7 @@ export default function App() {
   const [userName, setUserName] = useState('');
   const [daysAway, setDaysAway] = useState(0);
   const [screen, setScreen] = useState<Screen>('home');
+  const [homeDayIndex, setHomeDayIndex] = useState(0);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
@@ -137,6 +138,8 @@ export default function App() {
           daysAway={daysAway}
           preferencesPrompted={preferencesPrompted}
           planVersion={planVersion}
+          dayIndex={homeDayIndex}
+          onDayIndexChange={setHomeDayIndex}
           onNavigate={setScreen}
           onRecipeSelect={setSelectedRecipe}
           onShowPaywall={() => setShowPaywall(true)}

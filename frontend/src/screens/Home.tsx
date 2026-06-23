@@ -15,6 +15,8 @@ interface Props {
   daysAway?: number;
   preferencesPrompted?: boolean;
   planVersion?: number;
+  dayIndex: number;
+  onDayIndexChange: (index: number) => void;
   onNavigate: (screen: Screen) => void;
   onRecipeSelect: (recipe: Recipe) => void;
   onShowPaywall: () => void;
@@ -51,13 +53,14 @@ export function Home({
   daysAway = 0,
   preferencesPrompted = true,
   planVersion = 0,
+  dayIndex,
+  onDayIndexChange,
   onNavigate,
   onRecipeSelect,
   onShowPaywall,
   onOpenPreferences,
 }: Props) {
   const [plan, setPlan] = useState<WeekPlan | null>(null);
-  const [dayIndex, setDayIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isPremium, setIsPremium] = useState(isPremiumProp);
@@ -239,7 +242,7 @@ export function Home({
       const data = await api.extendPlan();
       setPlan(data.plan);
       setTotalDays(data.totalDays);
-      setDayIndex(totalDays);
+      onDayIndexChange(totalDays);
     } catch (err: unknown) {
       showError(err, handleExtendPlan);
     } finally {
@@ -253,7 +256,7 @@ export function Home({
       const data = await api.regenerateNewPlan();
       setPlan(data.plan);
       setTotalDays(data.totalDays);
-      setDayIndex(0);
+      onDayIndexChange(0);
     } catch (err: unknown) {
       showError(err, handleRegeneratePlan);
     } finally {
@@ -263,7 +266,7 @@ export function Home({
 
   const tryGoToDay = (index: number) => {
     if (index < 0 || index > 6) return;
-    setDayIndex(index);
+    onDayIndexChange(index);
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
