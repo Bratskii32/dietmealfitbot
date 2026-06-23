@@ -136,13 +136,52 @@ export function normalizeDayPlan(raw: unknown, fallbackDayNumber: number): DayPl
   };
 }
 
-export function normalizeWeekPlan(plan: WeekPlan): WeekPlan {
+function roundMacro(value: number): number {
+  return Math.round(value);
+}
+
+function scaleRecipeMacros(recipe: Recipe, coefficient: number): Recipe {
   return {
-    dailyCalories: toNumber(plan.dailyCalories, 2000),
+    ...recipe,
+    calories: roundMacro(recipe.calories * coefficient),
+    protein: roundMacro(recipe.protein * coefficient),
+    carbs: roundMacro(recipe.carbs * coefficient),
+    fat: roundMacro(recipe.fat * coefficient),
+  };
+}
+
+function validateDayCalories(day: DayPlan, dailyCalories: number): DayPlan {
+  if (dailyCalories <= 0 || day.meals.length === 0) return day;
+
+  const actualCalories = day.meals.reduce((sum, meal) => sum + meal.recipe.calories, 0);
+  if (actualCalories <= 0) return day;
+
+  if (Math.abs(actualCalories - dailyCalories) > dailyCalories * 0.1) {
+    const coefficient = dailyCalories / actualCalories;
+    return {
+      ...day,
+      meals: day.meals.map((meal) => ({
+        ...meal,
+        recipe: scaleRecipeMacros(meal.recipe, coefficient),
+      })),
+    };
+  }
+
+  return day;
+}
+
+export function normalizeWeekPlan(plan: WeekPlan): WeekPlan {
+  const dailyCalories = toNumber(plan.dailyCalories, 2000);
+  const days = (plan.days || []).map((d, i) =>
+    validateDayCalories(normalizeDayPlan(d, i + 1), dailyCalories)
+  );
+
+  return {
+    dailyCalories,
     dailyProtein: toNumber(plan.dailyProtein, 100),
     dailyCarbs: toNumber(plan.dailyCarbs, 200),
     dailyFat: toNumber(plan.dailyFat, 60),
-    days: (plan.days || []).map((d, i) => normalizeDayPlan(d, i + 1)),
+    days,
   };
 }
 
@@ -180,6 +219,13 @@ const ALLERGY_MAP: Record<string, string> = {
   none: 'Нет ограничений',
 };
 
+const PLAN_CALORIES_RULE = `КРИТИЧЕСКИ ВАЖНО: сумма calories всех блюд каждого дня ОБЯЗАНА равняться dailyCalories ± 50 ккал.
+Перед формированием финального JSON проверь сумму по каждому дню и скорректируй граммовку ингредиентов если нужно. Это требование важнее разнообразия блюд.`;
+
+const PLAN_FRUIT_SNACK_RULE = `Фрукты в качестве отдельного перекуса указывай в штуках с примерным весом в скобках:
+'1 среднее яблоко (~150г)', '1 банан (~120г)', '1 апельсин (~180г)'.
+Фрукты в составе смузи, коктейлей и других блюд — указывай в граммах как обычно.`;
+
 export async function generateMealPlan(profile: UserProfile, days = 7): Promise<WeekPlan> {
   const allergies = (profile.allergies || [])
     .map((a) => ALLERGY_MAP[a] || a)
@@ -190,7 +236,11 @@ export async function generateMealPlan(profile: UserProfile, days = 7): Promise<
   const eatingStyle = profile.eatingStyle ?? null;
   const cookingTime = profile.cookingTime ?? null;
 
-  const prompt = `Ты — профессиональный диетолог. Составь индивидуальный рацион питания на ${days} ${days === 3 ? 'дня' : 'дней'}.
+  const prompt = `${PLAN_CALORIES_RULE}
+
+${PLAN_FRUIT_SNACK_RULE}
+
+Ты — профессиональный диетолог. Составь индивидуальный рацион питания на ${days} ${days === 3 ? 'дня' : 'дней'}.
 Отвечай строго на русском языке.
 
 ВАЖНО: Дата: ${currentDate}. Seed: ${randomSeed}.
@@ -540,7 +590,11 @@ export async function generateMealPlanExtension(
         ? '- Ровно 2 перекуса (type: "snack") в каждом дне'
         : '- Перекусов нет, только завтрак, обед, ужин';
 
-  const prompt = `Ты — диетолог. У пользователя уже есть рацион на дни 1-${fromDay - 1}.
+  const prompt = `${PLAN_CALORIES_RULE}
+
+${PLAN_FRUIT_SNACK_RULE}
+
+Ты — диетолог. У пользователя уже есть рацион на дни 1-${fromDay - 1}.
 Существующие блюда (НЕ повторяй): ${existingMeals.join(', ')}.
 Составь дни ${fromDay}-${toDay} (${dayCount} ${dayCount === 1 ? 'день' : dayCount < 5 ? 'дня' : 'дней'}) в том же стиле.
 Цель: ${goalLabel}. Аллергии: ${allergies}.
@@ -579,7 +633,9 @@ ingredients — массив объектов {name, amount, unit}. instructions
     parsed = obj.days;
   }
 
-  return parsed.map((day, i) => normalizeDayPlan(day, fromDay + i));
+  return parsed.map((day, i) =>
+    validateDayCalories(normalizeDayPlan(day, fromDay + i), toNumber(existingPlan.dailyCalories, 2000))
+  );
 }
 
 export async function generateAchievementReward(
