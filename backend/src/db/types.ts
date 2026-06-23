@@ -74,4 +74,6 @@ export type EventType =
   | 'paywall_shown'
   | 'payment_started'
   | 'payment_completed'
-  | 'subscription_cancelled';
+  | 'subscription_cancelled'
+  | 'streak_nudge_sent'
+  | 'premium_expiry_nudge_sent';

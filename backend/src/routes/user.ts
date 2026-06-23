@@ -8,6 +8,7 @@ import {
   saveMealPreferences,
   markPreferencesPrompted,
   insertPlan,
+  hasAchievement,
 } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { FREEMIUM } from '../config/freemium.js';
@@ -15,6 +16,7 @@ import { resolvePremiumUser } from '../services/premium.js';
 import { buildUserProfile } from '../services/userProfile.js';
 import { generateMealPlan, WeekPlan } from '../services/claude.js';
 import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
+import { checkAchievements } from '../services/achievements.js';
 
 const router = Router();
 
@@ -30,6 +32,12 @@ router.get('/me', async (req: AuthRequest, res: Response) => {
   }
 
   const daysAway = await updateLastSeen(req.telegramId!);
+
+  if (user.onboarding_complete && !(await hasAchievement(req.telegramId!, 'first_steps'))) {
+    checkAchievements(req.telegramId!, { isFirstLogin: true }).catch(() => {});
+  } else {
+    checkAchievements(req.telegramId!).catch(() => {});
+  }
 
   res.json({
     exists: true,

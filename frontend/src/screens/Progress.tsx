@@ -1,15 +1,25 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 
+type Achievement = {
+  id: string;
+  title: string;
+  description: string;
+  unlocked: boolean;
+  reward_content: string | null;
+  progressText: string | null;
+};
+
 export function Progress() {
   const [weightLog, setWeightLog] = useState<{ weight: number; log_date: string }[]>([]);
   const [cookedCount, setCookedCount] = useState(0);
   const [streak, setStreak] = useState(0);
   const [streakMessage, setStreakMessage] = useState('');
   const [aiComment, setAiComment] = useState('');
-  const [achievements, setAchievements] = useState<{ id: string; title: string; unlocked: boolean }[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [todayWeight, setTodayWeight] = useState('');
   const [saving, setSaving] = useState(false);
+  const [selectedReward, setSelectedReward] = useState<Achievement | null>(null);
 
   useEffect(() => {
     loadProgress();
@@ -38,6 +48,12 @@ export function Progress() {
     } catch { /* ignore */ }
     finally {
       setSaving(false);
+    }
+  };
+
+  const handleAchievementClick = (a: Achievement) => {
+    if (a.unlocked && a.reward_content) {
+      setSelectedReward(a);
     }
   };
 
@@ -92,19 +108,68 @@ export function Progress() {
           <div
             key={a.id}
             className="card"
+            onClick={() => handleAchievementClick(a)}
             style={{
-              opacity: a.unlocked ? 1 : 0.5,
+              opacity: a.unlocked ? 1 : 0.45,
               marginBottom: 0,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
+              cursor: a.unlocked && a.reward_content ? 'pointer' : 'default',
             }}
           >
-            <span style={{ fontSize: 24 }}>{a.unlocked ? '✅' : '🔒'}</span>
-            <span style={{ fontSize: 15, fontWeight: a.unlocked ? 600 : 400 }}>{a.title}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 24 }}>{a.unlocked ? '🏅' : '🔒'}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: a.unlocked ? 600 : 400 }}>{a.title}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>{a.description}</div>
+                {!a.unlocked && a.progressText && (
+                  <div style={{ fontSize: 12, color: 'var(--primary)', marginTop: 6 }}>{a.progressText}</div>
+                )}
+                {a.unlocked && a.reward_content && (
+                  <div style={{ fontSize: 12, color: 'var(--primary)', marginTop: 6 }}>Нажми, чтобы открыть награду →</div>
+                )}
+              </div>
+            </div>
           </div>
         ))}
       </div>
+
+      {selectedReward && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16,
+          }}
+          onClick={() => setSelectedReward(null)}
+        >
+          <div
+            className="card"
+            style={{
+              width: '100%',
+              maxWidth: 480,
+              maxHeight: '70vh',
+              overflow: 'auto',
+              marginBottom: 0,
+              borderRadius: '16px 16px 0 0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: 18, marginBottom: 12 }}>{selectedReward.title}</h3>
+            <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-line' }}>{selectedReward.reward_content}</p>
+            <button
+              className="btn-primary"
+              style={{ marginTop: 16 }}
+              onClick={() => setSelectedReward(null)}
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

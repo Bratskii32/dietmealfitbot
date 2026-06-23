@@ -116,6 +116,15 @@ CREATE TABLE IF NOT EXISTS promo_codes (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_promo_codes_code ON promo_codes(UPPER(code));
+CREATE TABLE IF NOT EXISTS achievements (
+  id SERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  achievement_key TEXT NOT NULL,
+  reward_content TEXT,
+  unlocked_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, achievement_key)
+);
+CREATE INDEX IF NOT EXISTS idx_achievements_user ON achievements(user_id);
 `;
 
 export async function initSchema(): Promise<void> {

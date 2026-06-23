@@ -93,6 +93,22 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ dayNumber, mealType, recipeName, mode }) }
     ),
 
+  extendPlan: () =>
+    request<{
+      plan: import('../types').WeekPlan;
+      isPremium: boolean;
+      maxDays: number;
+      totalDays: number;
+    }>('/plan/extend', { method: 'POST' }),
+
+  regenerateNewPlan: () =>
+    request<{
+      plan: import('../types').WeekPlan;
+      isPremium: boolean;
+      maxDays: number;
+      totalDays: number;
+    }>('/plan/regenerate-new', { method: 'POST' }),
+
   getRefreshStatus: () => request<{ canRefresh: boolean; isPremium: boolean; maxDays: number }>('/plan/refresh-status'),
 
   getPlanHistory: () =>
@@ -158,7 +174,14 @@ export const api = {
       streak: number;
       streakMessage: string;
       aiComment: string;
-      achievements: { id: string; title: string; unlocked: boolean }[];
+      achievements: {
+        id: string;
+        title: string;
+        description: string;
+        unlocked: boolean;
+        reward_content: string | null;
+        progressText: string | null;
+      }[];
     }>('/progress'),
 
   saveWeight: (weight: number) =>

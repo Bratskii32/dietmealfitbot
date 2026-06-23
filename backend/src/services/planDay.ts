@@ -27,3 +27,10 @@ export function getBreakfastForPlanDay(plan: WeekPlan, dayIndex: number): { name
   if (!breakfast?.recipe) return null;
   return { name: breakfast.recipe.name, calories: breakfast.recipe.calories || 0 };
 }
+
+export function getDinnerForPlanDay(plan: WeekPlan, dayIndex: number): { name: string; calories: number } | null {
+  const day = plan.days?.[dayIndex];
+  const dinner = day?.meals?.find((m) => m.type === 'dinner');
+  if (!dinner?.recipe) return null;
+  return { name: dinner.recipe.name, calories: dinner.recipe.calories || 0 };
+}

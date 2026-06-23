@@ -484,6 +484,12 @@ export async function getUsersWithPlansForReminders(): Promise<
     first_name: string | null;
     plan_data: unknown;
     plan_created_at: string;
+    daily_status: string | null;
+    daily_status_date: string | null;
+    last_seen_at: string | null;
+    goal: string | null;
+    premium_until: string | null;
+    is_lifetime_premium: boolean;
   }[]
 > {
   const { rows } = await query<{
@@ -492,8 +498,16 @@ export async function getUsersWithPlansForReminders(): Promise<
     first_name: string | null;
     plan_data: unknown;
     plan_created_at: Date;
+    daily_status: string | null;
+    daily_status_date: string | null;
+    last_seen_at: Date | null;
+    goal: string | null;
+    premium_until: Date | null;
+    is_lifetime_premium: boolean;
   }>(
-    `SELECT u.telegram_id, u.name, u.first_name, wp.plan_data, wp.created_at AS plan_created_at
+    `SELECT u.telegram_id, u.name, u.first_name, u.daily_status, u.daily_status_date,
+            u.last_seen_at, u.goal, u.premium_until, u.is_lifetime_premium,
+            wp.plan_data, wp.created_at AS plan_created_at
      FROM users u
      INNER JOIN LATERAL (
        SELECT plan_data, created_at FROM week_plans
@@ -508,6 +522,12 @@ export async function getUsersWithPlansForReminders(): Promise<
     first_name: r.first_name,
     plan_data: r.plan_data,
     plan_created_at: r.plan_created_at.toISOString(),
+    daily_status: r.daily_status,
+    daily_status_date: r.daily_status_date,
+    last_seen_at: r.last_seen_at?.toISOString() || null,
+    goal: r.goal,
+    premium_until: r.premium_until?.toISOString() || null,
+    is_lifetime_premium: r.is_lifetime_premium,
   }));
 }
 
@@ -745,6 +765,110 @@ export async function activatePromoCode(
     client.release();
   }
 }
+
+export async function appendDaysToPlan(telegramId: string, newDays: DayPlan[]): Promise<void> {
+  const planRow = await getLatestPlan(telegramId);
+  if (!planRow) throw new Error('Plan not found');
+  const plan = JSON.parse(planRow.plan_data) as { days: DayPlan[] };
+  plan.days = [...(plan.days || []), ...newDays];
+  await query(
+    'UPDATE week_plans SET plan_data = $2, shopping_list = NULL, shopping_list_generated_at = NULL WHERE id = $1',
+    [planRow.id, JSON.stringify(plan)]
+  );
+}
+
+export async function updatePlanData(telegramId: string, planData: string): Promise<void> {
+  const planRow = await getLatestPlan(telegramId);
+  if (!planRow) throw new Error('Plan not found');
+  await query(
+    'UPDATE week_plans SET plan_data = $2, shopping_list = NULL, shopping_list_generated_at = NULL WHERE id = $1',
+    [planRow.id, planData]
+  );
+}
+
+export async function getUserAchievements(userId: string): Promise<
+  { achievement_key: string; reward_content: string | null; unlocked_at: string }[]
+> {
+  const { rows } = await query<{ achievement_key: string; reward_content: string | null; unlocked_at: Date }>(
+    'SELECT achievement_key, reward_content, unlocked_at FROM achievements WHERE user_id = $1 ORDER BY unlocked_at ASC',
+    [userId]
+  );
+  return rows.map((r) => ({
+    achievement_key: r.achievement_key,
+    reward_content: r.reward_content,
+    unlocked_at: r.unlocked_at.toISOString(),
+  }));
+}
+
+export async function hasAchievement(userId: string, key: string): Promise<boolean> {
+  const { rows } = await query<{ count: string }>(
+    'SELECT COUNT(*)::text AS count FROM achievements WHERE user_id = $1 AND achievement_key = $2',
+    [userId, key]
+  );
+  return parseInt(rows[0]?.count || '0', 10) > 0;
+}
+
+export async function unlockAchievement(
+  userId: string,
+  key: string,
+  rewardContent: string | null = null
+): Promise<boolean> {
+  if (await hasAchievement(userId, key)) return false;
+  await query(
+    `INSERT INTO achievements (user_id, achievement_key, reward_content) VALUES ($1, $2, $3)`,
+    [userId, key, rewardContent]
+  );
+  return true;
+}
+
+export async function setAchievementReward(userId: string, key: string, rewardContent: string): Promise<void> {
+  await query('UPDATE achievements SET reward_content = $3 WHERE user_id = $1 AND achievement_key = $2', [
+    userId, key, rewardContent,
+  ]);
+}
+
+export async function wasEventLoggedToday(telegramId: string, eventType: EventType): Promise<boolean> {
+  const { rows } = await query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM events
+     WHERE telegram_id = $1 AND event_type = $2 AND created_at::date = CURRENT_DATE`,
+    [telegramId, eventType]
+  );
+  return parseInt(rows[0]?.count || '0', 10) > 0;
+}
+
+export async function getActiveUsersForBroadcast(onlyPremium: boolean): Promise<
+  { telegram_id: string }[]
+> {
+  const premiumFilter = onlyPremium
+    ? `AND ((is_lifetime_premium = TRUE) OR (premium_until > NOW()))`
+    : '';
+  const { rows } = await query<{ telegram_id: string }>(
+    `SELECT telegram_id FROM users
+     WHERE onboarding_complete = TRUE
+       AND last_seen_at > NOW() - INTERVAL '30 days'
+       ${premiumFilter}`,
+  );
+  return rows;
+}
+
+export async function getUsersForStreakCheck(): Promise<
+  { telegram_id: string; notifications_enabled: boolean; last_seen_at: string | null }[]
+> {
+  const { rows } = await query<{
+    telegram_id: string;
+    notifications_enabled: boolean;
+    last_seen_at: Date | null;
+  }>(
+    `SELECT telegram_id, notifications_enabled, last_seen_at FROM users WHERE onboarding_complete = TRUE`
+  );
+  return rows.map((r) => ({
+    telegram_id: r.telegram_id,
+    notifications_enabled: r.notifications_enabled,
+    last_seen_at: r.last_seen_at?.toISOString() || null,
+  }));
+}
+
+type DayPlan = { dayNumber: number; meals: unknown[] };
 
 export function parseAllergies(user: UserRow): string[] {
   if (Array.isArray(user.allergies)) return user.allergies;

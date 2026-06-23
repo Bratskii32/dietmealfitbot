@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import {
   getLatestPlan,
   insertPlan,
+  appendDaysToPlan,
   getArchivedPlans,
   getArchivedPlan,
   updateUserLastPlanRefresh,
@@ -13,7 +14,7 @@ import {
   saveShoppingList,
 } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
-import { generateMealPlan, suggestMealReplacement, generateShoppingList, WeekPlan } from '../services/claude.js';
+import { generateMealPlan, generateMealPlanExtension, suggestMealReplacement, generateShoppingList, WeekPlan } from '../services/claude.js';
 import { FREEMIUM } from '../config/freemium.js';
 import { resolvePremiumUser } from '../services/premium.js';
 import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
@@ -91,6 +92,76 @@ router.post('/generate', async (req: AuthRequest, res: Response) => {
       isPremium,
       maxDays: days,
       canRefresh: isPremium,
+    });
+  } catch (error) {
+    try {
+      handleClaudeError(error);
+    } catch {
+      return serviceUnavailableResponse(res);
+    }
+  }
+});
+
+router.post('/extend', async (req: AuthRequest, res: Response) => {
+  const { isPremium, user } = await resolvePremiumUser(req.telegramId!);
+  if (!isPremium) {
+    return res.status(403).json({ error: 'premium_required', message: 'Доступно в Premium' });
+  }
+  if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+  const planRow = await getLatestPlan(req.telegramId!);
+  if (!planRow) return res.status(404).json({ error: 'Рацион не найден' });
+
+  const fullPlan = JSON.parse(planRow.plan_data) as WeekPlan;
+  const currentDays = fullPlan.days?.length || 0;
+  if (currentDays >= FREEMIUM.PREMIUM_DAYS) {
+    return res.status(400).json({ error: 'Рацион уже полный' });
+  }
+
+  try {
+    const profile = buildUserProfile(user);
+    const fromDay = currentDays + 1;
+    const newDays = await generateMealPlanExtension(profile, fullPlan, fromDay, FREEMIUM.PREMIUM_DAYS);
+    await appendDaysToPlan(req.telegramId!, newDays);
+    await logEvent(req.telegramId!, 'plan_generated');
+
+    const updated = await getLatestPlan(req.telegramId!);
+    const merged = JSON.parse(updated!.plan_data) as WeekPlan;
+
+    res.json({
+      plan: merged,
+      isPremium: true,
+      maxDays: FREEMIUM.PREMIUM_DAYS,
+      totalDays: merged.days.length,
+    });
+  } catch (error) {
+    try {
+      handleClaudeError(error);
+    } catch {
+      return serviceUnavailableResponse(res);
+    }
+  }
+});
+
+router.post('/regenerate-new', async (req: AuthRequest, res: Response) => {
+  const { isPremium, user } = await resolvePremiumUser(req.telegramId!);
+  if (!isPremium) {
+    return res.status(403).json({ error: 'premium_required', message: 'Доступно в Premium' });
+  }
+  if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+  try {
+    const profile = buildUserProfile(user);
+    const plan = await generateMealPlan(profile, FREEMIUM.PREMIUM_DAYS);
+    await insertPlan(req.telegramId!, JSON.stringify(plan), true);
+    await logEvent(req.telegramId!, 'plan_generated');
+    await updateUserLastPlanRefresh(req.telegramId!, getToday());
+
+    res.json({
+      plan,
+      isPremium: true,
+      maxDays: FREEMIUM.PREMIUM_DAYS,
+      totalDays: plan.days.length,
     });
   } catch (error) {
     try {

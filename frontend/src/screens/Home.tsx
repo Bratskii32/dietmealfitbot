@@ -23,6 +23,28 @@ interface Props {
 
 const DAY_NAMES = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
 
+function DayTopBar({ onBack }: { onBack: () => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+      <button
+        type="button"
+        onClick={onBack}
+        style={{
+          background: 'none',
+          border: 'none',
+          fontSize: 16,
+          color: 'var(--primary)',
+          cursor: 'pointer',
+          padding: '8px 0',
+          fontWeight: 600,
+        }}
+      >
+        ← Назад
+      </button>
+    </div>
+  );
+}
+
 export function Home({
   userName,
   isPremium: isPremiumProp,
@@ -39,7 +61,9 @@ export function Home({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isPremium, setIsPremium] = useState(isPremiumProp);
-  const [maxDays, setMaxDays] = useState(3);
+  const [totalDays, setTotalDays] = useState(3);
+  const [extendLoading, setExtendLoading] = useState(false);
+  const [regenerateLoading, setRegenerateLoading] = useState(false);
   const [dailyStatus, setDailyStatus] = useState('');
   const [statusLoading, setStatusLoading] = useState(true);
   const [snackRemaining, setSnackRemaining] = useState(3);
@@ -96,7 +120,7 @@ export function Home({
       ]);
       setPlan(planData.plan);
       setIsPremium(planData.isPremium);
-      setMaxDays(planData.maxDays);
+      setTotalDays(planData.totalDays ?? planData.plan?.days?.length ?? 3);
       if (!planData.isPremium) {
         setSnackRemaining(snackStatus.remaining);
       }
@@ -209,11 +233,36 @@ export function Home({
     }
   };
 
-  const tryGoToDay = (index: number) => {
-    if (index >= maxDays) {
-      onShowPaywall();
-      return;
+  const handleExtendPlan = async () => {
+    setExtendLoading(true);
+    try {
+      const data = await api.extendPlan();
+      setPlan(data.plan);
+      setTotalDays(data.totalDays);
+      setDayIndex(totalDays);
+    } catch (err: unknown) {
+      showError(err, handleExtendPlan);
+    } finally {
+      setExtendLoading(false);
     }
+  };
+
+  const handleRegeneratePlan = async () => {
+    setRegenerateLoading(true);
+    try {
+      const data = await api.regenerateNewPlan();
+      setPlan(data.plan);
+      setTotalDays(data.totalDays);
+      setDayIndex(0);
+    } catch (err: unknown) {
+      showError(err, handleRegeneratePlan);
+    } finally {
+      setRegenerateLoading(false);
+    }
+  };
+
+  const tryGoToDay = (index: number) => {
+    if (index < 0 || index > 6) return;
     setDayIndex(index);
   };
 
@@ -250,6 +299,90 @@ export function Home({
 
   if (!plan) {
     return <p className="error-text">Рацион не найден</p>;
+  }
+
+  const displayDayNumber = dayIndex + 1;
+  const showFreePaywall = !isPremium && dayIndex >= 3;
+  const showPremiumExtend = isPremium && totalDays < 7 && dayIndex >= totalDays;
+  const showPlanComplete = isPremium && totalDays >= 7 && dayIndex === 6;
+
+  const renderDayDots = () => (
+    <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
+      {Array.from({ length: 7 }, (_, i) => {
+        const locked = !isPremium && i >= 3;
+        const beyondPlan = isPremium && i >= totalDays && totalDays < 7;
+        return (
+          <div
+            key={i}
+            onClick={() => tryGoToDay(i)}
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: i === dayIndex ? 'var(--primary)' : locked || beyondPlan ? '#E0E0E0' : 'var(--border)',
+              cursor: 'pointer',
+              opacity: locked || beyondPlan ? 0.5 : 1,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+
+  if (showFreePaywall) {
+    return (
+      <div
+        className="screen-content pull-container"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <DayTopBar onBack={() => tryGoToDay(dayIndex - 1)} />
+        {renderDayDots()}
+        <div className="card" style={{ textAlign: 'center', padding: '32px 24px' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⭐</div>
+          <h2 style={{ fontSize: 20, marginBottom: 8 }}>День {displayDayNumber} доступен в Premium</h2>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.5 }}>
+            Открой полный рацион на 7 дней с персональными рецептами и списком покупок
+          </p>
+          <button className="btn-primary" onClick={onShowPaywall}>
+            Открыть доступ
+          </button>
+        </div>
+        {toast && (
+          <ErrorToast message={toast.message} onRetry={toast.retry} onClose={() => setToast(null)} />
+        )}
+      </div>
+    );
+  }
+
+  if (showPremiumExtend) {
+    const fromDay = totalDays + 1;
+    return (
+      <div
+        className="screen-content pull-container"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <DayTopBar onBack={() => tryGoToDay(Math.min(dayIndex - 1, totalDays - 1))} />
+        {renderDayDots()}
+        <div className="card" style={{ textAlign: 'center', padding: '32px 24px' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🚀</div>
+          <h2 style={{ fontSize: 20, marginBottom: 8 }}>Продолжи свой рацион 🚀</h2>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.5 }}>
+            У тебя {totalDays} {totalDays === 1 ? 'день' : totalDays < 5 ? 'дня' : 'дней'} из 7.
+            Добавим оставшиеся с учётом уже выбранных продуктов?
+          </p>
+          <button className="btn-primary" onClick={handleExtendPlan} disabled={extendLoading}>
+            {extendLoading ? '⏳ Генерирую...' : `Добавить дни ${fromDay}-7`}
+          </button>
+        </div>
+        {toast && (
+          <ErrorToast message={toast.message} onRetry={toast.retry} onClose={() => setToast(null)} />
+        )}
+      </div>
+    );
   }
 
   const day = plan.days[dayIndex];
@@ -312,6 +445,10 @@ export function Home({
         )}
       </div>
 
+      {dayIndex > 0 && (
+        <DayTopBar onBack={() => tryGoToDay(dayIndex - 1)} />
+      )}
+
       {statusLoading ? (
         <div className="skeleton skeleton-text" style={{ width: '85%', height: 16, marginBottom: 12 }} />
       ) : dailyStatus ? (
@@ -344,19 +481,7 @@ export function Home({
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
-        {Array.from({ length: 7 }, (_, i) => (
-          <div
-            key={i}
-            onClick={() => tryGoToDay(i)}
-            style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: i === dayIndex ? 'var(--primary)' : i >= maxDays ? '#E0E0E0' : 'var(--border)',
-              cursor: 'pointer', opacity: i >= maxDays ? 0.5 : 1,
-            }}
-          />
-        ))}
-      </div>
+      {renderDayDots()}
 
       <CalorieChart
         consumed={consumed}
@@ -378,6 +503,18 @@ export function Home({
           onShowPaywall={onShowPaywall}
         />
       ))}
+
+      {showPlanComplete && (
+        <div className="card" style={{ textAlign: 'center', marginBottom: 16, padding: '24px 16px' }}>
+          <h3 style={{ fontSize: 18, marginBottom: 8 }}>Рацион завершён 🎉</h3>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
+            Ты прошёл всю неделю! Готов к новому рациону?
+          </p>
+          <button className="btn-primary" onClick={handleRegeneratePlan} disabled={regenerateLoading}>
+            {regenerateLoading ? '⏳ Генерирую...' : 'Сгенерировать новый рацион на неделю 🔄'}
+          </button>
+        </div>
+      )}
 
       <button
         className="btn-secondary"

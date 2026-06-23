@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth.js';
 import { FREEMIUM } from '../config/freemium.js';
 import { WeekPlan } from '../services/claude.js';
 import { resolvePremiumUser } from '../services/premium.js';
+import { checkAchievements } from '../services/achievements.js';
 
 const router = Router();
 
@@ -60,6 +61,7 @@ router.post('/cooked', async (req: AuthRequest, res: Response) => {
   }
 
   await insertCookedRecipe(req.telegramId!, recipeName);
+  checkAchievements(req.telegramId!).catch(() => {});
 
   res.json({ success: true });
 });

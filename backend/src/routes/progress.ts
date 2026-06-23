@@ -6,9 +6,11 @@ import {
   upsertWeight,
   getUser,
   setProgressComment,
+  getUserAchievements,
 } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { generateProgressComment } from '../services/claude.js';
+import { calcStreak, getAchievementProgress } from '../services/achievements.js';
 
 const router = Router();
 
@@ -16,20 +18,10 @@ function getToday(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-function calcStreak(cookedDates: string[]): number {
-  let streak = 0;
-  const today = new Date();
-  for (let i = 0; i < cookedDates.length; i++) {
-    const expected = new Date(today);
-    expected.setDate(expected.getDate() - i);
-    const expectedStr = expected.toISOString().split('T')[0];
-    if (cookedDates[i] === expectedStr) {
-      streak++;
-    } else {
-      break;
-    }
-  }
-  return streak;
+function daysLabel(n: number): string {
+  if (n % 10 === 1 && n % 100 !== 11) return 'день';
+  if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return 'дня';
+  return 'дней';
 }
 
 router.get('/', async (req: AuthRequest, res: Response) => {
@@ -50,12 +42,36 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     }
   }
 
-  const achievements: { id: string; title: string; unlocked: boolean }[] = [
-    { id: 'streak7', title: '7 дней подряд 🔥', unlocked: streak >= 7 },
-    { id: 'recipes10', title: '10 рецептов приготовлено 👨‍🍳', unlocked: cookedCount >= 10 },
-    { id: 'streak3', title: '3 дня подряд 💪', unlocked: streak >= 3 },
-    { id: 'recipes5', title: '5 рецептов приготовлено 🍳', unlocked: cookedCount >= 5 },
-  ];
+  const unlocked = await getUserAchievements(req.telegramId!);
+  const unlockedMap = new Map(unlocked.map((a) => [a.achievement_key, a]));
+
+  const achievements = getAchievementProgress(streak, cookedCount).map((a) => {
+    const row = unlockedMap.get(a.key);
+    const isUnlocked = !!row;
+    let progressText: string | null = null;
+
+    if (!isUnlocked) {
+      if (a.key === 'cook_3') {
+        const left = 3 - cookedCount;
+        if (left > 0) {
+          progressText = `Ещё ${left} рецепт${left === 1 ? '' : left < 5 ? 'а' : 'ов'} до награды 🍰`;
+        }
+      } else if (a.key.startsWith('streak_') && a.progressText) {
+        progressText = a.progressText.replace('до награды', 'до следующей награды');
+      } else if (a.key === 'first_steps') {
+        progressText = null;
+      }
+    }
+
+    return {
+      id: a.key,
+      title: a.title,
+      description: a.description,
+      unlocked: isUnlocked,
+      reward_content: row?.reward_content || null,
+      progressText,
+    };
+  });
 
   res.json({
     weightLog,
@@ -66,12 +82,6 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     achievements,
   });
 });
-
-function daysLabel(n: number): string {
-  if (n % 10 === 1 && n % 100 !== 11) return 'день';
-  if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return 'дня';
-  return 'дней';
-}
 
 router.post('/weight', async (req: AuthRequest, res: Response) => {
   const { weight } = req.body;

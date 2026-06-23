@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { UserRow } from '../db/types.js';
 
 const client = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 
@@ -419,4 +420,56 @@ export async function generateShoppingList(weekPlan: WeekPlan): Promise<string> 
 Ответ только на русском языке, без лишнего текста до и после списка.`,
     2048
   );
+}
+
+export async function generateMealPlanExtension(
+  profile: UserProfile,
+  existingPlan: WeekPlan,
+  fromDay: number,
+  toDay: number
+): Promise<DayPlan[]> {
+  const existingMeals = existingPlan.days.flatMap((d) =>
+    d.meals.map((m) => m.recipe.name)
+  );
+  const allergies = (profile.allergies || [])
+    .map((a) => ALLERGY_MAP[a] || a)
+    .join(', ') || 'Нет';
+  const goalLabel = GOAL_MAP[profile.goal || ''] || profile.goal;
+
+  const prompt = `Ты — диетолог. У пользователя уже есть рацион на дни 1-${fromDay - 1}.
+Существующие блюда (НЕ повторяй): ${existingMeals.join(', ')}.
+Составь дни ${fromDay}-${toDay} (${toDay - fromDay + 1} дней) в том же стиле.
+Цель: ${goalLabel}. Аллергии: ${allergies}.
+Калории/БЖУ как в плане: ${existingPlan.dailyCalories} ккал, Б${existingPlan.dailyProtein} Ж${existingPlan.dailyFat} У${existingPlan.dailyCarbs}.
+Каждый рецепт: название, ингредиенты с граммами, инструкция, КБЖУ.
+Ответ строго JSON массив days:
+[{"dayNumber":${fromDay},"meals":[{"type":"breakfast","recipe":{...}}]}]`;
+
+  const text = await askClaude(prompt, 12000);
+  const match = text.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error('Не удалось распарсить дополнение рациона');
+  return JSON.parse(match[0]) as DayPlan[];
+}
+
+export async function generateAchievementReward(
+  achievementKey: string,
+  user: UserRow
+): Promise<string> {
+  const goalLabel = GOAL_MAP[user.goal || ''] || user.goal || 'Поддержать вес';
+  const profileStr = JSON.stringify(
+    { goal: user.goal, weight: user.weight, height: user.height, age: user.age },
+    null,
+    2
+  );
+
+  const prompts: Record<string, string> = {
+    cook_3: `Придумай простой вкусный ПП-десерт из 3-4 ингредиентов. Учти цель пользователя: ${goalLabel}. Дай название, ингредиенты с граммовкой, 3-4 шага приготовления и КБЖУ. Формат: обычный текст, не JSON.`,
+    streak_3: `Пользователь придерживается плана 3 дня подряд. Цель: ${goalLabel}, вес: ${user.weight}, рост: ${user.height}. Дай один конкретный практический совет по питанию именно под его цель. Максимум 3 предложения, дружеский тон, без воды.`,
+    streak_7: `Придумай вкусное праздничное блюдо которое вписывается в цель ${goalLabel}. Название, ингредиенты с граммовкой, шаги приготовления, КБЖУ. Формат: обычный текст.`,
+    streak_14: `Пользователь держит режим питания 14 дней. Цель: ${goalLabel}, параметры: ${profileStr}. Дай персональные рекомендации на следующие 2 недели — что добавить в рацион, чего избегать, как скорректировать КБЖУ для прогресса. Максимум 5 конкретных пунктов.`,
+  };
+
+  const prompt = prompts[achievementKey];
+  if (!prompt) return '';
+  return askClaude(prompt, 1024);
 }

@@ -6,6 +6,7 @@ import {
   revokePremiumAccess,
   createPromoCode,
   getUser,
+  getActiveUsersForBroadcast,
 } from '../db/repository.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import {
@@ -13,6 +14,7 @@ import {
   notifyPremiumDaysGift,
   notifyPremiumRevoked,
 } from '../services/premium.js';
+import { getBot } from '../bot/instance.js';
 
 const router = Router();
 
@@ -106,6 +108,33 @@ router.post('/create-promo', adminAuth, async (req: Request, res: Response) => {
     console.error('Create promo error:', err);
     res.status(500).json({ error: 'internal error' });
   }
+});
+
+router.post('/broadcast', adminAuth, async (req, res) => {
+  const { message, onlyPremium } = req.body as { message?: string; onlyPremium?: boolean };
+  if (!message?.trim()) {
+    return res.status(400).json({ error: 'message required' });
+  }
+
+  const bot = getBot();
+  if (!bot) {
+    return res.status(503).json({ error: 'Bot not available' });
+  }
+
+  const users = await getActiveUsersForBroadcast(!!onlyPremium);
+  let sent = 0;
+  let failed = 0;
+
+  for (const user of users) {
+    try {
+      await bot.sendMessage(Number(user.telegram_id), message.trim());
+      sent++;
+    } catch {
+      failed++;
+    }
+  }
+
+  res.json({ success: true, sent, failed, total: users.length });
 });
 
 export default router;
