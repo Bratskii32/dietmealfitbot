@@ -156,7 +156,7 @@ function validateDayCalories(day: DayPlan, dailyCalories: number): DayPlan {
   const actualCalories = day.meals.reduce((sum, meal) => sum + meal.recipe.calories, 0);
   if (actualCalories <= 0) return day;
 
-  if (Math.abs(actualCalories - dailyCalories) > dailyCalories * 0.1) {
+  if (Math.abs(actualCalories - dailyCalories) > dailyCalories * 0.15) {
     const coefficient = dailyCalories / actualCalories;
     return {
       ...day,
@@ -219,8 +219,10 @@ const ALLERGY_MAP: Record<string, string> = {
   none: 'Нет ограничений',
 };
 
-const PLAN_CALORIES_RULE = `КРИТИЧЕСКИ ВАЖНО: сумма calories всех блюд каждого дня ОБЯЗАНА равняться dailyCalories ± 50 ккал.
-Перед формированием финального JSON проверь сумму по каждому дню и скорректируй граммовку ингредиентов если нужно. Это требование важнее разнообразия блюд.`;
+const PLAN_CALORIES_RULE = `КРИТИЧЕСКИ ВАЖНО: сумма calories всех блюд каждого дня ОБЯЗАНА быть в пределах dailyCalories ± 150 ккал.
+Перед формированием финального JSON проверь сумму по каждому дню и скорректируй граммовку ингредиентов если нужно. Это требование важнее разнообразия блюд.
+Калории по дням могут естественно варьироваться ±100-150 ккал от нормы — это физиологично.
+Не делай все дни одинаковыми.`;
 
 const PLAN_FRUIT_SNACK_RULE = `Фрукты в качестве отдельного перекуса указывай в штуках с примерным весом в скобках:
 '1 среднее яблоко (~150г)', '1 банан (~120г)', '1 апельсин (~180г)'.
