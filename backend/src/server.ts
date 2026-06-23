@@ -12,6 +12,7 @@ import homeRoutes from './routes/home.js';
 import subscriptionRoutes from './routes/subscription.js';
 import webhookRoutes from './routes/webhook.js';
 import adminRoutes from './routes/admin.js';
+import promoRoutes from './routes/promo.js';
 import { initBot } from './bot/index.js';
 import { setBot } from './bot/instance.js';
 import { initDatabase } from './db/store.js';
@@ -38,6 +39,7 @@ app.use('/api/progress', authMiddleware, progressRoutes);
 app.use('/api/payment', authMiddleware, paymentRoutes);
 app.use('/api/home', authMiddleware, homeRoutes);
 app.use('/api/subscription', authMiddleware, subscriptionRoutes);
+app.use('/api/promo', authMiddleware, promoRoutes);
 
 async function main() {
   await initDatabase();

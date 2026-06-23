@@ -104,6 +104,18 @@ UPDATE week_plans wp SET is_archived = TRUE
 WHERE id NOT IN (
   SELECT DISTINCT ON (telegram_id) id FROM week_plans ORDER BY telegram_id, created_at DESC
 ) AND (is_archived = FALSE OR is_archived IS NULL);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_lifetime_premium BOOLEAN DEFAULT FALSE;
+CREATE TABLE IF NOT EXISTS promo_codes (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  days INTEGER NOT NULL,
+  max_uses INTEGER DEFAULT NULL,
+  used_count INTEGER DEFAULT 0,
+  expires_at DATE DEFAULT NULL,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_promo_codes_code ON promo_codes(UPPER(code));
 `;
 
 export async function initSchema(): Promise<void> {

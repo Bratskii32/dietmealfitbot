@@ -26,6 +26,10 @@ export function Settings({
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showSupportHint, setShowSupportHint] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoMessage, setPromoMessage] = useState('');
+  const [promoError, setPromoError] = useState('');
 
   useEffect(() => {
     api.getSettings().then((s) => setNotificationsEnabled(s.notificationsEnabled)).catch(() => {});
@@ -77,6 +81,24 @@ export function Settings({
     }
   };
 
+  const handleActivatePromo = async () => {
+    if (!promoCode.trim()) return;
+    setPromoLoading(true);
+    setPromoError('');
+    setPromoMessage('');
+    try {
+      const data = await api.activatePromo(promoCode.trim());
+      setPromoMessage(data.message);
+      setPromoCode('');
+      onSubscriptionChange?.();
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      setPromoError(e.message || 'Не удалось активировать промокод');
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
   return (
     <div className="screen-content">
       <h2 style={{ fontSize: 22, marginBottom: 20 }}>Настройки ⚙️</h2>
@@ -113,6 +135,30 @@ export function Settings({
       <button className="card" style={{ width: '100%', textAlign: 'left', marginBottom: 10, cursor: 'pointer' }} onClick={onShowPaywall}>
         ⭐ {isPremium ? 'Продлить подписку' : 'Управление подпиской'}
       </button>
+
+      {!isPremium && (
+        <div className="card" style={{ marginBottom: 10 }}>
+          <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 15 }}>🎁 Промокод</div>
+          <input
+            type="text"
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+            placeholder="Введи промокод"
+            style={{ width: '100%', marginBottom: 10, textTransform: 'uppercase' }}
+          />
+          {promoError && <p className="error-text" style={{ marginBottom: 8 }}>{promoError}</p>}
+          {promoMessage && (
+            <p style={{ color: 'var(--primary)', fontSize: 14, marginBottom: 8 }}>{promoMessage}</p>
+          )}
+          <button
+            className="btn-primary"
+            onClick={handleActivatePromo}
+            disabled={promoLoading || !promoCode.trim()}
+          >
+            {promoLoading ? 'Активация...' : 'Активировать'}
+          </button>
+        </div>
+      )}
 
       {isPremium && !subscriptionCancelled && (
         <button

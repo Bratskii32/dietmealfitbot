@@ -120,6 +120,12 @@ export const api = {
       { method: 'POST' }
     ),
 
+  activatePromo: (code: string) =>
+    request<{ success: boolean; days: number; premiumUntil: string; message: string }>(
+      '/promo/activate',
+      { method: 'POST', body: JSON.stringify({ code }) }
+    ),
+
   createPayment: () => request<{ paymentUrl: string }>('/payment/create', { method: 'POST' }),
 
   getChatMessages: () =>

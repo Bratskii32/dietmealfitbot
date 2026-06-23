@@ -7,9 +7,10 @@ import {
 import { getBot } from '../bot/instance.js';
 
 export function isPremiumActive(user: UserRow | undefined): boolean {
-  if (!user?.is_premium) return false;
-  if (!user.premium_until) return false;
-  return new Date(user.premium_until) > new Date();
+  if (!user) return false;
+  if (user.is_lifetime_premium) return true;
+  if (user.premium_until && new Date(user.premium_until) > new Date()) return true;
+  return false;
 }
 
 export async function resolvePremiumUser(telegramId: string): Promise<{
@@ -19,7 +20,12 @@ export async function resolvePremiumUser(telegramId: string): Promise<{
   const user = await getUser(telegramId);
   if (!user) return { user: undefined, isPremium: false };
 
-  if (user.is_premium && user.premium_until && new Date(user.premium_until) <= new Date()) {
+  if (
+    !user.is_lifetime_premium &&
+    user.is_premium &&
+    user.premium_until &&
+    new Date(user.premium_until) <= new Date()
+  ) {
     const wasNotified = user.premium_expiry_notified;
     await expirePremium(telegramId);
     if (!wasNotified) {
@@ -94,5 +100,56 @@ export async function notifySubscriptionCancelled(telegramId: string, expiresAt:
   await bot.sendMessage(
     Number(telegramId),
     `Подписка отменена. Доступ сохраняется до ${date}.\nНадеемся увидеть тебя снова! 🙏`
+  );
+}
+
+function appButtonKeyboard() {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  return {
+    inline_keyboard: [[{ text: '🥗 Открыть приложение', web_app: { url: frontendUrl } }]],
+  };
+}
+
+function formatPremiumDate(expiresAt: string): string {
+  return new Date(expiresAt).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+export async function notifyLifetimePremiumGranted(telegramId: string) {
+  const bot = getBot();
+  if (!bot) return;
+  await bot.sendMessage(
+    Number(telegramId),
+    '🎁 Тебе активирован пожизненный Premium доступ!'
+  );
+}
+
+export async function notifyPremiumDaysGift(telegramId: string, days: number, expiresAt: string) {
+  const bot = getBot();
+  if (!bot) return;
+  const date = formatPremiumDate(expiresAt);
+  await bot.sendMessage(
+    Number(telegramId),
+    `🎁 Тебе подарили ${days} дней Premium!\nДоступ активен до ${date}.`,
+    { reply_markup: appButtonKeyboard() }
+  );
+}
+
+export async function notifyPremiumRevoked(telegramId: string) {
+  const bot = getBot();
+  if (!bot) return;
+  await bot.sendMessage(Number(telegramId), 'Premium доступ деактивирован.');
+}
+
+export async function notifyPromoActivated(telegramId: string, days: number, expiresAt: string) {
+  const bot = getBot();
+  if (!bot) return;
+  const date = formatPremiumDate(expiresAt);
+  await bot.sendMessage(
+    Number(telegramId),
+    `✅ Промокод активирован!\n+${days} дней Premium.\nДоступ до ${date} 🎉`
   );
 }

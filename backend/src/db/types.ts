@@ -14,6 +14,7 @@ export interface UserRow {
   allergies?: string[] | string;
   is_premium?: number;
   premium_until?: string;
+  is_lifetime_premium?: number;
   premium_expiry_notified?: number;
   subscription_cancelled?: number;
   daily_status?: string;

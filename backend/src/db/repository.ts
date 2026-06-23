@@ -1,4 +1,4 @@
-import { query, now } from './pool.js';
+import { query, now, getPool } from './pool.js';
 import { UserRow, ChatMessageRow, WeekPlanRow, EventType } from './types.js';
 
 type DbUser = {
@@ -17,6 +17,7 @@ type DbUser = {
   allergies: unknown;
   is_premium: boolean;
   premium_until: Date | null;
+  is_lifetime_premium: boolean;
   premium_expiry_notified: boolean;
   subscription_cancelled: boolean;
   daily_status: string | null;
@@ -57,6 +58,7 @@ function mapUser(row: DbUser): UserRow {
     allergies: (row.allergies as string[]) ?? [],
     is_premium: boolToInt(row.is_premium),
     premium_until: row.premium_until?.toISOString(),
+    is_lifetime_premium: boolToInt(row.is_lifetime_premium),
     premium_expiry_notified: boolToInt(row.premium_expiry_notified),
     subscription_cancelled: boolToInt(row.subscription_cancelled),
     daily_status: row.daily_status ?? undefined,
@@ -148,9 +150,10 @@ export function hasConsent(user: UserRow | undefined): boolean {
 }
 
 export function isPremiumUser(user: UserRow | undefined): boolean {
-  if (!user?.is_premium) return false;
-  if (!user.premium_until) return false;
-  return new Date(user.premium_until) > new Date();
+  if (!user) return false;
+  if (user.is_lifetime_premium) return true;
+  if (user.premium_until && new Date(user.premium_until) > new Date()) return true;
+  return false;
 }
 
 export function getWeekStartMonday(): string {
@@ -164,7 +167,8 @@ export function getWeekStartMonday(): string {
 
 export async function expirePremium(telegramId: string): Promise<void> {
   await query(
-    'UPDATE users SET is_premium = FALSE, premium_until = NULL, updated_at = $2 WHERE telegram_id = $1',
+    `UPDATE users SET is_premium = FALSE, premium_until = NULL, updated_at = $2
+     WHERE telegram_id = $1 AND (is_lifetime_premium = FALSE OR is_lifetime_premium IS NULL)`,
     [telegramId, now()]
   );
 }
@@ -530,7 +534,7 @@ export async function getAdminStats(): Promise<{
     query<{ count: string }>('SELECT COUNT(*)::text AS count FROM users'),
     query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM users
-       WHERE is_premium = TRUE AND premium_until > NOW()`
+       WHERE (is_lifetime_premium = TRUE) OR (premium_until > NOW())`
     ),
     query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM users WHERE created_at::date = CURRENT_DATE`
@@ -573,6 +577,173 @@ export async function getAdminStats(): Promise<{
       amount: 299,
     })),
   };
+}
+
+function computePremiumUntilAfterDays(user: UserRow | undefined, days: number): string {
+  const nowDate = new Date();
+  let base: Date;
+  if (user?.premium_until && new Date(user.premium_until) > nowDate) {
+    base = new Date(user.premium_until);
+  } else {
+    base = nowDate;
+  }
+  base.setDate(base.getDate() + days);
+  return base.toISOString();
+}
+
+export async function grantLifetimePremium(telegramId: string): Promise<void> {
+  const timestamp = now();
+  await query(
+    `INSERT INTO users (telegram_id, is_premium, is_lifetime_premium, premium_expiry_notified, created_at, updated_at)
+     VALUES ($1, TRUE, TRUE, FALSE, $2, $2)
+     ON CONFLICT (telegram_id) DO UPDATE SET
+       is_premium = TRUE, is_lifetime_premium = TRUE, premium_expiry_notified = FALSE, updated_at = $2`,
+    [telegramId, timestamp]
+  );
+}
+
+export async function grantPremiumDays(telegramId: string, days: number): Promise<string> {
+  const user = await getUser(telegramId);
+  const untilStr = computePremiumUntilAfterDays(user, days);
+  const timestamp = now();
+  await query(
+    `INSERT INTO users (telegram_id, is_premium, premium_until, premium_expiry_notified, subscription_cancelled, created_at, updated_at)
+     VALUES ($1, TRUE, $2, FALSE, FALSE, $3, $3)
+     ON CONFLICT (telegram_id) DO UPDATE SET
+       is_premium = TRUE, premium_until = $2, premium_expiry_notified = FALSE, updated_at = $3`,
+    [telegramId, untilStr, timestamp]
+  );
+  return untilStr;
+}
+
+export async function revokePremiumAccess(telegramId: string): Promise<void> {
+  await query(
+    `UPDATE users SET is_premium = FALSE, is_lifetime_premium = FALSE, premium_until = NULL, updated_at = $2
+     WHERE telegram_id = $1`,
+    [telegramId, now()]
+  );
+}
+
+export type PromoCodeRow = {
+  id: number;
+  code: string;
+  days: number;
+  max_uses: number | null;
+  used_count: number;
+  expires_at: Date | string | null;
+  is_active: boolean;
+  created_at: Date;
+};
+
+export class PromoCodeError extends Error {
+  constructor(
+    public code: string,
+    message: string
+  ) {
+    super(message);
+    this.name = 'PromoCodeError';
+  }
+}
+
+export async function createPromoCode(data: {
+  code: string;
+  days: number;
+  maxUses?: number | null;
+  expiresAt?: string | null;
+}): Promise<{
+  id: number;
+  code: string;
+  days: number;
+  maxUses: number | null;
+  usedCount: number;
+  expiresAt: string | null;
+  isActive: boolean;
+  createdAt: string;
+}> {
+  const normalizedCode = data.code.trim().toUpperCase();
+  const { rows } = await query<PromoCodeRow>(
+    `INSERT INTO promo_codes (code, days, max_uses, expires_at)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [normalizedCode, data.days, data.maxUses ?? null, data.expiresAt ?? null]
+  );
+  const row = rows[0];
+  return {
+    id: row.id,
+    code: row.code,
+    days: row.days,
+    maxUses: row.max_uses,
+    usedCount: row.used_count,
+    expiresAt: row.expires_at
+      ? (row.expires_at instanceof Date
+          ? row.expires_at.toISOString().split('T')[0]
+          : String(row.expires_at))
+      : null,
+    isActive: row.is_active,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+export async function activatePromoCode(
+  code: string,
+  telegramId: string
+): Promise<{ days: number; premiumUntil: string }> {
+  const client = await getPool().connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query<PromoCodeRow>(
+      `SELECT * FROM promo_codes WHERE UPPER(code) = UPPER($1) FOR UPDATE`,
+      [code.trim()]
+    );
+    const promo = rows[0];
+
+    if (!promo || !promo.is_active) {
+      throw new PromoCodeError('not_found', 'Промокод не найден');
+    }
+
+    if (promo.expires_at) {
+      const expiresEnd = new Date(promo.expires_at);
+      expiresEnd.setHours(23, 59, 59, 999);
+      if (expiresEnd < new Date()) {
+        throw new PromoCodeError('expired', 'Срок действия истёк');
+      }
+    }
+
+    if (promo.max_uses !== null && promo.used_count >= promo.max_uses) {
+      throw new PromoCodeError('used', 'Промокод уже использован');
+    }
+
+    await client.query('UPDATE promo_codes SET used_count = used_count + 1 WHERE id = $1', [promo.id]);
+
+    const { rows: userRows } = await client.query<{ premium_until: Date | null }>(
+      'SELECT premium_until FROM users WHERE telegram_id = $1',
+      [telegramId]
+    );
+    const existingUntil = userRows[0]?.premium_until?.toISOString();
+    const untilStr = computePremiumUntilAfterDays(
+      existingUntil ? { premium_until: existingUntil } as UserRow : undefined,
+      promo.days
+    );
+    const timestamp = now();
+
+    await client.query(
+      `INSERT INTO users (telegram_id, is_premium, premium_until, premium_expiry_notified, subscription_cancelled, created_at, updated_at)
+       VALUES ($1, TRUE, $2, FALSE, FALSE, $3, $3)
+       ON CONFLICT (telegram_id) DO UPDATE SET
+         is_premium = TRUE, premium_until = $2, premium_expiry_notified = FALSE, updated_at = $3`,
+      [telegramId, untilStr, timestamp]
+    );
+
+    await client.query('COMMIT');
+    return { days: promo.days, premiumUntil: untilStr };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export function parseAllergies(user: UserRow): string[] {
