@@ -31,6 +31,24 @@ async function fetchStats(token: string): Promise<AdminStats> {
   return res.json();
 }
 
+async function sendBroadcast(
+  token: string,
+  message: string,
+  onlyPremium: boolean
+): Promise<{ sent: number; failed: number; total: number }> {
+  const res = await fetch(`${API_URL}/admin/broadcast`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Admin-Token': token,
+    },
+    body: JSON.stringify({ message, onlyPremium }),
+  });
+  if (res.status === 401) throw new Error('unauthorized');
+  if (!res.ok) throw new Error('broadcast_failed');
+  return res.json();
+}
+
 function formatChartDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 }
@@ -61,6 +79,11 @@ export function Admin() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [onlyPremium, setOnlyPremium] = useState(false);
+  const [broadcastLoading, setBroadcastLoading] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState('');
+  const [broadcastError, setBroadcastError] = useState('');
 
   const loadStats = useCallback(async (authToken: string) => {
     setLoading(true);
@@ -101,6 +124,33 @@ export function Admin() {
     setAuthenticated(false);
     setStats(null);
     setError('');
+    setBroadcastMessage('');
+    setBroadcastResult('');
+    setBroadcastError('');
+  };
+
+  const handleBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!broadcastMessage.trim() || !token) return;
+
+    setBroadcastLoading(true);
+    setBroadcastResult('');
+    setBroadcastError('');
+
+    try {
+      const data = await sendBroadcast(token, broadcastMessage.trim(), onlyPremium);
+      setBroadcastResult(`✅ Отправлено ${data.sent} пользователям`);
+      setBroadcastMessage('');
+    } catch (err) {
+      if ((err as Error).message === 'unauthorized') {
+        handleLogout();
+        setError('Неверный пароль');
+      } else {
+        setBroadcastError('❌ Ошибка отправки');
+      }
+    } finally {
+      setBroadcastLoading(false);
+    }
   };
 
   if (!authenticated || !stats) {
@@ -182,7 +232,7 @@ export function Admin() {
           </ResponsiveContainer>
         </div>
 
-        <div className="card">
+        <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 600, marginBottom: 12 }}>Последние 10 оплат</div>
           {stats.recent_payments.length === 0 ? (
             <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Оплат пока нет</p>
@@ -203,6 +253,63 @@ export function Admin() {
               </div>
             ))
           )}
+        </div>
+
+        <div className="card">
+          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>📢 Рассылка пользователям</h2>
+          <form onSubmit={handleBroadcast}>
+            <textarea
+              value={broadcastMessage}
+              onChange={(e) => setBroadcastMessage(e.target.value)}
+              placeholder="Введи текст сообщения..."
+              rows={5}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                border: '2px solid var(--border)',
+                borderRadius: 12,
+                fontSize: 15,
+                lineHeight: 1.5,
+                resize: 'vertical',
+                marginBottom: 12,
+                fontFamily: 'inherit',
+              }}
+            />
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                marginBottom: 16,
+                fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={onlyPremium}
+                onChange={(e) => setOnlyPremium(e.target.checked)}
+                style={{ width: 18, height: 18 }}
+              />
+              Только Premium пользователям
+            </label>
+            {broadcastError && (
+              <p className="error-text" style={{ marginBottom: 12 }}>{broadcastError}</p>
+            )}
+            {broadcastResult && (
+              <p style={{ color: '#4CAF50', fontSize: 14, marginBottom: 12, fontWeight: 600 }}>
+                {broadcastResult}
+              </p>
+            )}
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={broadcastLoading || !broadcastMessage.trim()}
+              style={{ background: '#4CAF50' }}
+            >
+              {broadcastLoading ? 'Отправка...' : 'Отправить рассылку'}
+            </button>
+          </form>
         </div>
       </div>
     </div>
