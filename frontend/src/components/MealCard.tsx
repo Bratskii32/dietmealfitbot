@@ -42,10 +42,10 @@ export function MealCard({
       </div>
       <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 10 }}>{recipe.name}</div>
       <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
-        <span>🔥 {recipe.calories} ккал</span>
-        <span>🥩 {recipe.protein}г</span>
-        <span>🧈 {recipe.fat}г</span>
-        <span>🍞 {recipe.carbs}г</span>
+        <span>🔥 {Number(recipe.calories) || 0} ккал</span>
+        <span>🥩 {Number(recipe.protein) || 0}г</span>
+        <span>🧈 {Number(recipe.fat) || 0}г</span>
+        <span>🍞 {Number(recipe.carbs) || 0}г</span>
       </div>
       {recipe.replaceReason && (
         <p style={{ fontSize: 13, color: 'var(--primary)', marginBottom: 10 }}>

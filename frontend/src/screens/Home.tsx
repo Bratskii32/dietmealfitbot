@@ -396,10 +396,10 @@ export function Home({
   const dayName = DAY_NAMES[displayDate.getDay()];
   const dateStr = displayDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 
-  const consumed = day.meals.reduce((sum, m) => sum + m.recipe.calories, 0);
-  const consumedProtein = day.meals.reduce((sum, m) => sum + m.recipe.protein, 0);
-  const consumedCarbs = day.meals.reduce((sum, m) => sum + m.recipe.carbs, 0);
-  const consumedFat = day.meals.reduce((sum, m) => sum + m.recipe.fat, 0);
+  const consumed = day.meals.reduce((sum, m) => sum + (Number(m.recipe.calories) || 0), 0);
+  const consumedProtein = day.meals.reduce((sum, m) => sum + (Number(m.recipe.protein) || 0), 0);
+  const consumedCarbs = day.meals.reduce((sum, m) => sum + (Number(m.recipe.carbs) || 0), 0);
+  const consumedFat = day.meals.reduce((sum, m) => sum + (Number(m.recipe.fat) || 0), 0);
 
   return (
     <div

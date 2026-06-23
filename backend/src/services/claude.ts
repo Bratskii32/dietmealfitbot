@@ -48,6 +48,117 @@ export interface WeekPlan {
   days: DayPlan[];
 }
 
+function toNumber(value: unknown, fallback = 0): number {
+  if (typeof value === 'number' && !Number.isNaN(value)) return value;
+  if (typeof value === 'string') {
+    const n = parseFloat(value.replace(',', '.').replace(/[^\d.-]/g, ''));
+    if (!Number.isNaN(n)) return n;
+  }
+  return fallback;
+}
+
+function normalizeIngredients(raw: unknown): Recipe['ingredients'] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (typeof item === 'string') {
+        return { name: item, amount: '', unit: '' };
+      }
+      const obj = item as Record<string, unknown>;
+      return {
+        name: String(obj.name ?? obj.ingredient ?? obj.product ?? ''),
+        amount: String(obj.amount ?? obj.quantity ?? obj.qty ?? ''),
+        unit: String(obj.unit ?? obj.measure ?? 'г'),
+      };
+    })
+    .filter((i) => i.name);
+}
+
+function normalizeInstructions(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((s) => String(s).trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw
+      .split(/\n+/)
+      .map((s) => s.replace(/^\d+[\.\)]\s*/, '').trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+export function normalizeRecipe(raw: unknown): Recipe {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const kbju = (r.kbju ?? r.macros ?? r.nutrition ?? r.KBJU) as Record<string, unknown> | undefined;
+
+  const calories = toNumber(r.calories ?? r.kcal ?? kbju?.calories ?? kbju?.kcal);
+  const protein = toNumber(r.protein ?? r.proteins ?? kbju?.protein ?? kbju?.proteins);
+  const carbs = toNumber(r.carbs ?? r.carbohydrates ?? kbju?.carbs ?? kbju?.carbohydrates);
+  const fat = toNumber(r.fat ?? r.fats ?? kbju?.fat ?? kbju?.fats);
+
+  return {
+    name: String(r.name ?? r.title ?? 'Блюдо'),
+    description: String(r.description ?? r.desc ?? ''),
+    ingredients: normalizeIngredients(r.ingredients ?? r.ingredient ?? r.products),
+    instructions: normalizeInstructions(r.instructions ?? r.steps ?? r.preparation),
+    cookingTime: toNumber(r.cookingTime ?? r.cookTime ?? r.time ?? r.cooking_time, 20),
+    calories,
+    protein,
+    carbs,
+    fat,
+    servings: Math.max(1, toNumber(r.servings ?? r.portions, 1)),
+  };
+}
+
+function normalizeMeal(raw: unknown): Meal {
+  const m = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const recipeRaw = m.recipe ?? m;
+  const recipe = normalizeRecipe(recipeRaw);
+  if (typeof recipeRaw === 'object' && recipeRaw !== null) {
+    const extra = recipeRaw as Record<string, unknown>;
+    if (typeof extra.replaceReason === 'string') {
+      (recipe as Recipe & { replaceReason?: string }).replaceReason = extra.replaceReason;
+    }
+  }
+  return {
+    type: String(m.type ?? 'breakfast'),
+    recipe,
+  };
+}
+
+export function normalizeDayPlan(raw: unknown, fallbackDayNumber: number): DayPlan {
+  const d = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const mealsRaw = d.meals ?? d.meal ?? [];
+  const meals = Array.isArray(mealsRaw) ? mealsRaw.map(normalizeMeal) : [];
+  return {
+    dayNumber: toNumber(d.dayNumber ?? d.day ?? fallbackDayNumber, fallbackDayNumber),
+    meals,
+  };
+}
+
+export function normalizeWeekPlan(plan: WeekPlan): WeekPlan {
+  return {
+    dailyCalories: toNumber(plan.dailyCalories, 2000),
+    dailyProtein: toNumber(plan.dailyProtein, 100),
+    dailyCarbs: toNumber(plan.dailyCarbs, 200),
+    dailyFat: toNumber(plan.dailyFat, 60),
+    days: (plan.days || []).map((d, i) => normalizeDayPlan(d, i + 1)),
+  };
+}
+
+const RECIPE_JSON_EXAMPLE = `{
+            "name": "Овсяная каша с бананом",
+            "description": "Питательный завтрак",
+            "ingredients": [{"name": "Овсяные хлопья", "amount": "80", "unit": "г"}],
+            "instructions": ["Залить хлопья кипятком", "Добавить нарезанный банан"],
+            "cookingTime": 10,
+            "calories": 350,
+            "protein": 12,
+            "carbs": 58,
+            "fat": 6,
+            "servings": 1
+          }`;
+
 const GOAL_MAP: Record<string, string> = {
   lose: 'Похудеть',
   gain: 'Набрать массу',
@@ -171,18 +282,7 @@ JSON структура:
       "meals": [
         {
           "type": "breakfast",
-          "recipe": {
-            "name": "Овсяная каша с бананом",
-            "description": "Питательный завтрак",
-            "ingredients": [{"name": "Овсяные хлопья", "amount": "80", "unit": "г"}],
-            "instructions": ["Залить хлопья кипятком", "Добавить нарезанный банан"],
-            "cookingTime": 10,
-            "calories": 350,
-            "protein": 12,
-            "carbs": 58,
-            "fat": 6,
-            "servings": 1
-          }
+          "recipe": ${RECIPE_JSON_EXAMPLE}
         }
       ]
     }
@@ -203,7 +303,7 @@ JSON структура:
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('Не удалось распарсить ответ AI');
 
-  return JSON.parse(jsonMatch[0]) as WeekPlan;
+  return normalizeWeekPlan(JSON.parse(jsonMatch[0]) as WeekPlan);
 }
 
 export async function chatWithDietitian(
@@ -384,25 +484,19 @@ ${REPLACEMENT_RECIPE_JSON}`;
   if (!match) throw new Error('Не удалось распарсить замену');
 
   const raw = JSON.parse(match[0]) as Partial<Recipe>;
-  if (!raw.name || !Array.isArray(raw.ingredients) || raw.ingredients.length === 0) {
+  if (!raw.name && !(raw as Record<string, unknown>).title) {
     throw new Error('AI вернул неполный рецепт');
   }
-  if (!Array.isArray(raw.instructions) || raw.instructions.length === 0) {
+
+  const recipe = normalizeRecipe(raw);
+  if (recipe.ingredients.length === 0) {
+    throw new Error('AI вернул неполный рецепт');
+  }
+  if (recipe.instructions.length === 0) {
     throw new Error('AI вернул рецепт без инструкции');
   }
 
-  return {
-    name: raw.name,
-    description: raw.description || '',
-    ingredients: raw.ingredients,
-    instructions: raw.instructions,
-    cookingTime: raw.cookingTime ?? 20,
-    calories: raw.calories ?? 0,
-    protein: raw.protein ?? 0,
-    carbs: raw.carbs ?? 0,
-    fat: raw.fat ?? 0,
-    servings: raw.servings ?? 1,
-  };
+  return recipe;
 }
 
 export async function generateProgressComment(streakDays: number, goal: string): Promise<string> {
@@ -435,20 +529,57 @@ export async function generateMealPlanExtension(
     .map((a) => ALLERGY_MAP[a] || a)
     .join(', ') || 'Нет';
   const goalLabel = GOAL_MAP[profile.goal || ''] || profile.goal;
+  const eatingStyle = profile.eatingStyle ?? null;
+  const cookingTime = profile.cookingTime ?? null;
+  const dayCount = toDay - fromDay + 1;
+
+  const snackRule =
+    profile.mealsPerDay === 4
+      ? '- Ровно 1 перекус (type: "snack") в каждом дне'
+      : profile.mealsPerDay === 5
+        ? '- Ровно 2 перекуса (type: "snack") в каждом дне'
+        : '- Перекусов нет, только завтрак, обед, ужин';
 
   const prompt = `Ты — диетолог. У пользователя уже есть рацион на дни 1-${fromDay - 1}.
 Существующие блюда (НЕ повторяй): ${existingMeals.join(', ')}.
-Составь дни ${fromDay}-${toDay} (${toDay - fromDay + 1} дней) в том же стиле.
+Составь дни ${fromDay}-${toDay} (${dayCount} ${dayCount === 1 ? 'день' : dayCount < 5 ? 'дня' : 'дней'}) в том же стиле.
 Цель: ${goalLabel}. Аллергии: ${allergies}.
+Стиль питания: ${eatingStyle ?? 'null'}. Время на готовку: ${cookingTime ?? 'null'}.
 Калории/БЖУ как в плане: ${existingPlan.dailyCalories} ккал, Б${existingPlan.dailyProtein} Ж${existingPlan.dailyFat} У${existingPlan.dailyCarbs}.
-Каждый рецепт: название, ингредиенты с граммами, инструкция, КБЖУ.
-Ответ строго JSON массив days:
-[{"dayNumber":${fromDay},"meals":[{"type":"breakfast","recipe":{...}}]}]`;
+Количество приёмов пищи: ${profile.mealsPerDay}
+${snackRule}
+
+Каждый рецепт ОБЯЗАТЕЛЬНО содержит все поля: name, description, ingredients, instructions, cookingTime, calories, protein, carbs, fat, servings.
+calories, protein, carbs, fat, cookingTime, servings — только числа, не строки.
+ingredients — массив объектов {name, amount, unit}. instructions — массив строк.
+
+Ответ строго JSON-массив days (без текста до и после):
+[
+  {
+    "dayNumber": ${fromDay},
+    "meals": [
+      {
+        "type": "breakfast",
+        "recipe": ${RECIPE_JSON_EXAMPLE}
+      }
+    ]
+  }
+]`;
 
   const text = await askClaude(prompt, 12000);
-  const match = text.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error('Не удалось распарсить дополнение рациона');
-  return JSON.parse(match[0]) as DayPlan[];
+  const arrayMatch = text.match(/\[[\s\S]*\]/);
+  let parsed: unknown[];
+  if (arrayMatch) {
+    parsed = JSON.parse(arrayMatch[0]) as unknown[];
+  } else {
+    const objMatch = text.match(/\{[\s\S]*\}/);
+    if (!objMatch) throw new Error('Не удалось распарсить дополнение рациона');
+    const obj = JSON.parse(objMatch[0]) as { days?: unknown[] };
+    if (!Array.isArray(obj.days)) throw new Error('Не удалось распарсить дополнение рациона');
+    parsed = obj.days;
+  }
+
+  return parsed.map((day, i) => normalizeDayPlan(day, fromDay + i));
 }
 
 export async function generateAchievementReward(
