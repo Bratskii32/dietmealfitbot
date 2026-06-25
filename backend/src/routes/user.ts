@@ -9,6 +9,7 @@ import {
   markPreferencesPrompted,
   insertPlan,
   hasAchievement,
+  setUserEmail,
 } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { FREEMIUM } from '../config/freemium.js';
@@ -90,7 +91,22 @@ router.get('/settings', async (req: AuthRequest, res: Response) => {
     notificationsEnabled: user.user?.notifications_enabled !== 0,
     eatingStyle: user.user?.eating_style || null,
     cookingTime: user.user?.cooking_time || null,
+    email: user.user?.email || null,
   });
+});
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+router.patch('/email', async (req: AuthRequest, res: Response) => {
+  const { email } = req.body as { email?: string };
+  if (!email?.trim() || !isValidEmail(email.trim())) {
+    return res.status(400).json({ error: 'invalid_email', message: 'Введите корректный email' });
+  }
+
+  await setUserEmail(req.telegramId!, email.trim());
+  res.json({ success: true, email: email.trim().toLowerCase() });
 });
 
 router.patch('/settings', async (req: AuthRequest, res: Response) => {

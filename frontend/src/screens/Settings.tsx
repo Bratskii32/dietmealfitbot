@@ -42,9 +42,17 @@ export function Settings({
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [savedEmail, setSavedEmail] = useState<string | null>(null);
+  const [emailInput, setEmailInput] = useState('');
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
 
   useEffect(() => {
-    api.getSettings().then((s) => setNotificationsEnabled(s.notificationsEnabled)).catch(() => {});
+    api.getSettings().then((s) => {
+      setNotificationsEnabled(s.notificationsEnabled);
+      setSavedEmail(s.email || null);
+    }).catch(() => {});
   }, []);
 
   const expiresLabel = premiumExpiresAt
@@ -105,6 +113,23 @@ export function Settings({
     }
   };
 
+  const handleSaveEmail = async () => {
+    if (!emailInput.trim()) return;
+    setEmailLoading(true);
+    setEmailError('');
+    try {
+      const data = await api.saveEmail(emailInput.trim());
+      setSavedEmail(data.email);
+      setEditingEmail(false);
+      setEmailInput('');
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      setEmailError(e.message || 'Не удалось сохранить email');
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
   const handleActivatePromo = async () => {
     if (!promoCode.trim()) return;
     setPromoLoading(true);
@@ -146,6 +171,65 @@ export function Settings({
         </div>
       )}
 
+      <button className="card" style={listButtonStyle} onClick={onShowPaywall}>
+        <span>⭐ {isPremium ? 'Продлить подписку' : 'Управление подпиской'}</span>
+        <span style={{ color: 'var(--text-secondary)' }}>→</span>
+      </button>
+
+      <div className="card" style={{ marginBottom: 10 }}>
+        <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 15 }}>📧 Email для связи</div>
+        {savedEmail && !editingEmail ? (
+          <>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              ✓ {savedEmail}
+            </p>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setEditingEmail(true);
+                setEmailInput(savedEmail);
+                setEmailError('');
+              }}
+            >
+              Изменить
+            </button>
+          </>
+        ) : (
+          <>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>
+              Оставь email — напишем даже если Telegram будет недоступен
+            </p>
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              placeholder="example@mail.ru"
+              autoComplete="email"
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                border: '2px solid var(--border)',
+                borderRadius: 12,
+                fontSize: 16,
+                marginBottom: 10,
+              }}
+            />
+            {emailError && (
+              <p className="error-text" style={{ marginBottom: 10 }}>{emailError}</p>
+            )}
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleSaveEmail}
+              disabled={emailLoading || !emailInput.trim()}
+            >
+              {emailLoading ? 'Сохранение...' : 'Сохранить'}
+            </button>
+          </>
+        )}
+      </div>
+
       <button className="card" style={listButtonStyle} onClick={onConfigureRation}>
         <span>⚙️ Настроить рацион</span>
         <span style={{ color: 'var(--text-secondary)' }}>→</span>
@@ -153,11 +237,6 @@ export function Settings({
 
       <button className="card" style={listButtonStyle} onClick={onOpenPlanHistory}>
         <span>📚 История рационов</span>
-        <span style={{ color: 'var(--text-secondary)' }}>→</span>
-      </button>
-
-      <button className="card" style={listButtonStyle} onClick={onShowPaywall}>
-        <span>⭐ {isPremium ? 'Продлить подписку' : 'Управление подпиской'}</span>
         <span style={{ color: 'var(--text-secondary)' }}>→</span>
       </button>
 

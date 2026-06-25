@@ -44,12 +44,19 @@ export const api = {
     notificationsEnabled: boolean;
     eatingStyle?: string | null;
     cookingTime?: string | null;
+    email?: string | null;
   }>('/user/settings'),
 
   updateSettings: (notificationsEnabled: boolean) =>
     request('/user/settings', {
       method: 'PATCH',
       body: JSON.stringify({ notificationsEnabled }),
+    }),
+
+  saveEmail: (email: string) =>
+    request<{ success: boolean; email: string }>('/user/email', {
+      method: 'PATCH',
+      body: JSON.stringify({ email }),
     }),
 
   logEvent: (eventType: string) =>

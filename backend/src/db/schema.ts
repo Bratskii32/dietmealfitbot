@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS achievements (
   UNIQUE(user_id, achievement_key)
 );
 CREATE INDEX IF NOT EXISTS idx_achievements_user ON achievements(user_id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
 `;
 
 export async function initSchema(): Promise<void> {

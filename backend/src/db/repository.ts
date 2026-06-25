@@ -32,6 +32,7 @@ type DbUser = {
   eating_style: string | null;
   cooking_time: string | null;
   preferences_prompted: boolean;
+  email: string | null;
   last_seen_at: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -73,6 +74,7 @@ function mapUser(row: DbUser): UserRow {
     eating_style: row.eating_style ?? undefined,
     cooking_time: row.cooking_time ?? undefined,
     preferences_prompted: boolToInt(row.preferences_prompted ?? false),
+    email: row.email ?? undefined,
     last_seen_at: row.last_seen_at?.toISOString(),
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
@@ -474,6 +476,14 @@ export async function deleteUserData(telegramId: string): Promise<void> {
 export async function setNotificationsEnabled(telegramId: string, enabled: boolean): Promise<void> {
   await query('UPDATE users SET notifications_enabled = $2, updated_at = $3 WHERE telegram_id = $1', [
     telegramId, enabled, now(),
+  ]);
+}
+
+export async function setUserEmail(telegramId: string, email: string): Promise<void> {
+  await query('UPDATE users SET email = $2, updated_at = $3 WHERE telegram_id = $1', [
+    telegramId,
+    email.trim().toLowerCase(),
+    now(),
   ]);
 }
 
