@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import WebApp from '@twa-dev/sdk';
 import { api } from '../api/client';
 import { OFFER_URL } from '../constants/legal';
+import { openExternalLink } from '../utils/telegram';
 
 interface Props {
   onClose: () => void;
@@ -22,7 +22,7 @@ export function Paywall({ onClose, isPremium, premiumExpiresAt }: Props) {
     setError('');
     try {
       const { paymentUrl } = await api.createPayment();
-      WebApp.openLink(paymentUrl);
+      openExternalLink(paymentUrl);
     } catch {
       setError('Не удалось открыть оплату. Попробуйте позже.');
     } finally {
@@ -30,7 +30,7 @@ export function Paywall({ onClose, isPremium, premiumExpiresAt }: Props) {
     }
   };
 
-  const openOffer = () => WebApp.openLink(OFFER_URL);
+  const openOffer = () => openExternalLink(OFFER_URL);
 
   const expiresLabel = premiumExpiresAt
     ? new Date(premiumExpiresAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })

@@ -126,6 +126,8 @@ CREATE TABLE IF NOT EXISTS achievements (
 );
 CREATE INDEX IF NOT EXISTS idx_achievements_user ON achievements(user_id);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_auth_email ON users (LOWER(email)) WHERE password_hash IS NOT NULL;
 `;
 
 export async function initSchema(): Promise<void> {

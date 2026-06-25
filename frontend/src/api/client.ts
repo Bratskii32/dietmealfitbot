@@ -1,7 +1,29 @@
+import { isTelegramWebApp, getStoredToken } from '../utils/telegram';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 function getInitData(): string {
+  if (!isTelegramWebApp()) return '';
   return window.Telegram?.WebApp?.initData || '';
+}
+
+function buildAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  const initData = getInitData();
+  if (initData) {
+    headers['X-Telegram-Init-Data'] = initData;
+    return headers;
+  }
+
+  const token = getStoredToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return headers;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -14,8 +36,28 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     res = await fetch(`${API_URL}${path}`, {
       ...options,
       headers: {
+        ...buildAuthHeaders(),
+        ...options.headers,
+      },
+    });
+  } catch {
+    throw { error: 'offline', message: 'Нет подключения к интернету' };
+  }
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw { status: res.status, ...data };
+  }
+  return data;
+}
+
+async function publicRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
         'Content-Type': 'application/json',
-        'X-Telegram-Init-Data': getInitData(),
         ...options.headers,
       },
     });
@@ -31,6 +73,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  register: (email: string, password: string) =>
+    publicRequest<{ success: boolean; token: string; user: { telegramId: string; email: string } }>(
+      '/auth/register',
+      { method: 'POST', body: JSON.stringify({ email, password }) }
+    ),
+
+  login: (email: string, password: string) =>
+    publicRequest<{ success: boolean; token: string; user: { telegramId: string; email: string } }>(
+      '/auth/login',
+      { method: 'POST', body: JSON.stringify({ email, password }) }
+    ),
+
+  authMe: () =>
+    request<{
+      exists: boolean;
+      daysAway?: number;
+      user?: import('../types').User;
+    }>('/auth/me'),
+
   getUser: () => request<{
     exists: boolean;
     daysAway?: number;

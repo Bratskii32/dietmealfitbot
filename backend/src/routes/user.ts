@@ -1,14 +1,11 @@
 import { Router, Response } from 'express';
 import {
   saveOnboarding,
-  parseAllergies,
-  updateLastSeen,
   setNotificationsEnabled,
   logEvent,
   saveMealPreferences,
   markPreferencesPrompted,
   insertPlan,
-  hasAchievement,
   setUserEmail,
 } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
@@ -17,7 +14,7 @@ import { resolvePremiumUser } from '../services/premium.js';
 import { buildUserProfile } from '../services/userProfile.js';
 import { generateMealPlan, WeekPlan } from '../services/claude.js';
 import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
-import { checkAchievements } from '../services/achievements.js';
+import { buildUserMeResponse } from '../services/userMe.js';
 
 const router = Router();
 
@@ -27,42 +24,8 @@ function filterPlanByTier(plan: WeekPlan, isPremium: boolean): WeekPlan {
 }
 
 router.get('/me', async (req: AuthRequest, res: Response) => {
-  const { user, isPremium } = await resolvePremiumUser(req.telegramId!);
-  if (!user) {
-    return res.json({ exists: false });
-  }
-
-  const daysAway = await updateLastSeen(req.telegramId!);
-
-  if (user.onboarding_complete && !(await hasAchievement(req.telegramId!, 'first_steps'))) {
-    checkAchievements(req.telegramId!, { isFirstLogin: true }).catch(() => {});
-  } else {
-    checkAchievements(req.telegramId!).catch(() => {});
-  }
-
-  res.json({
-    exists: true,
-    daysAway,
-    user: {
-      telegramId: user.telegram_id,
-      name: user.name,
-      age: user.age,
-      gender: user.gender,
-      height: user.height,
-      weight: user.weight,
-      goal: user.goal,
-      activityLevel: user.activity_level,
-      mealsPerDay: user.meals_per_day,
-      allergies: parseAllergies(user),
-      isPremium,
-      onboardingComplete: !!user.onboarding_complete,
-      maxDays: isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS,
-      notificationsEnabled: user.notifications_enabled !== 0,
-      preferencesPrompted: !!user.preferences_prompted,
-      eatingStyle: user.eating_style || null,
-      cookingTime: user.cooking_time || null,
-    },
-  });
+  const payload = await buildUserMeResponse(req.telegramId!);
+  res.json(payload);
 });
 
 router.post('/onboarding', async (req: AuthRequest, res: Response) => {

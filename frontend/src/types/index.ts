@@ -1,6 +1,7 @@
 export interface User {
   telegramId: string;
   name: string;
+  email?: string | null;
   age: number;
   gender: string;
   height: number;

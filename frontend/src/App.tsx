@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTelegram } from './hooks/useTelegram';
 import { api } from './api/client';
+import { isTelegramWebApp, clearStoredToken } from './utils/telegram';
 import { Onboarding } from './screens/Onboarding';
 import { Home } from './screens/Home';
 import { Chat } from './screens/Chat';
@@ -18,6 +20,7 @@ type AppState = 'loading' | 'onboarding' | 'app';
 
 export default function App() {
   const { isReady, user } = useTelegram();
+  const navigate = useNavigate();
   const [appState, setAppState] = useState<AppState>('loading');
   const [userName, setUserName] = useState('');
   const [daysAway, setDaysAway] = useState(0);
@@ -51,10 +54,10 @@ export default function App() {
 
   const checkUser = async () => {
     try {
-      const data = await api.getUser();
+      const data = isTelegramWebApp() ? await api.getUser() : await api.authMe();
       await loadSubscription();
       if (data.exists && data.user?.onboardingComplete) {
-        setUserName(data.user.name || user?.first_name || 'друг');
+        setUserName(data.user.name || user?.first_name || data.user.email?.split('@')[0] || 'друг');
         setIsPremium(data.user.isPremium);
         setDaysAway(data.daysAway || 0);
         setPreferencesPrompted(!!data.user.preferencesPrompted);
@@ -65,6 +68,11 @@ export default function App() {
         setAppState('onboarding');
       }
     } catch {
+      if (!isTelegramWebApp()) {
+        clearStoredToken();
+        navigate('/login', { replace: true });
+        return;
+      }
       setAppState('onboarding');
     }
   };

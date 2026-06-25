@@ -13,6 +13,7 @@ import subscriptionRoutes from './routes/subscription.js';
 import webhookRoutes from './routes/webhook.js';
 import adminRoutes from './routes/admin.js';
 import promoRoutes from './routes/promo.js';
+import authRoutes from './routes/auth.js';
 import { initBot } from './bot/index.js';
 import { setBot } from './bot/instance.js';
 import { initDatabase } from './db/store.js';
@@ -30,6 +31,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/webhook', webhookRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/auth', authRoutes);
 
 app.use('/api/user', authMiddleware, userRoutes);
 app.use('/api/plan', authMiddleware, planRoutes);

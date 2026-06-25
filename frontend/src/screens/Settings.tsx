@@ -1,8 +1,8 @@
 import { useState, useEffect, type CSSProperties } from 'react';
-import WebApp from '@twa-dev/sdk';
 import { api } from '../api/client';
 import { OFFER_URL, PRIVACY_URL } from '../constants/legal';
 import { ErrorToast } from '../components/ErrorToast';
+import { openExternalLink, closeMiniApp } from '../utils/telegram';
 
 interface Props {
   onShowPaywall: () => void;
@@ -59,7 +59,7 @@ export function Settings({
     ? new Date(premiumExpiresAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
     : null;
 
-  const openLink = (url: string) => WebApp.openLink(url);
+  const openLink = (url: string) => openExternalLink(url);
 
   /** Mini App уже открыт в @dietmealfitbot — openTelegramLink на того же бота не срабатывает */
   const openSupport = () => {
@@ -68,11 +68,7 @@ export function Settings({
 
   const closeAppForSupport = () => {
     try {
-      if (window.Telegram?.WebApp?.close) {
-        window.Telegram.WebApp.close();
-        return;
-      }
-      WebApp.close();
+      closeMiniApp();
     } catch {
       setShowSupportHint(false);
     }

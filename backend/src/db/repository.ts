@@ -1,4 +1,5 @@
 import { query, now, getPool } from './pool.js';
+import { randomUUID } from 'crypto';
 import { UserRow, ChatMessageRow, WeekPlanRow, EventType } from './types.js';
 
 type DbUser = {
@@ -33,6 +34,7 @@ type DbUser = {
   cooking_time: string | null;
   preferences_prompted: boolean;
   email: string | null;
+  password_hash: string | null;
   last_seen_at: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -485,6 +487,30 @@ export async function setUserEmail(telegramId: string, email: string): Promise<v
     email.trim().toLowerCase(),
     now(),
   ]);
+}
+
+export async function getUserByAuthEmail(
+  email: string
+): Promise<{ telegram_id: string; email: string | null; password_hash: string } | undefined> {
+  const { rows } = await query<{ telegram_id: string; email: string | null; password_hash: string }>(
+    'SELECT telegram_id, email, password_hash FROM users WHERE LOWER(email) = LOWER($1) AND password_hash IS NOT NULL',
+    [email.trim()]
+  );
+  return rows[0];
+}
+
+export async function createWebUser(email: string, passwordHash: string): Promise<string> {
+  const telegramId = `web_${randomUUID()}`;
+  const normalizedEmail = email.trim().toLowerCase();
+  const timestamp = now();
+
+  await query(
+    `INSERT INTO users (telegram_id, email, password_hash, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $4)`,
+    [telegramId, normalizedEmail, passwordHash, timestamp]
+  );
+  await logEvent(telegramId, 'user_registered');
+  return telegramId;
 }
 
 export async function getUsersWithPlansForReminders(): Promise<

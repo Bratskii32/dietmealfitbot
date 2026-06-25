@@ -1,20 +1,27 @@
 import { useEffect, useState } from 'react';
-import WebApp from '@twa-dev/sdk';
+import { isTelegramWebApp, getTelegramUserName } from '../utils/telegram';
 
 export function useTelegram() {
-  const [isReady, setIsReady] = useState(false);
+  const inTelegram = isTelegramWebApp();
+  const [isReady, setIsReady] = useState(!inTelegram);
 
   useEffect(() => {
-    WebApp.ready();
-    WebApp.expand();
-    setIsReady(true);
-  }, []);
+    if (!inTelegram) {
+      setIsReady(true);
+      return;
+    }
 
-  const user = WebApp.initDataUnsafe?.user;
+    window.Telegram?.WebApp?.ready();
+    window.Telegram?.WebApp?.expand();
+    setIsReady(true);
+  }, [inTelegram]);
+
+  const user = inTelegram ? window.Telegram?.WebApp?.initDataUnsafe?.user : undefined;
 
   return {
     isReady,
+    isTelegram: inTelegram,
     user,
-    webApp: WebApp,
+    userName: user?.first_name || getTelegramUserName(),
   };
 }
