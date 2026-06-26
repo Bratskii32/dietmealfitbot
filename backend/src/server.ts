@@ -22,7 +22,25 @@ import { startReminderCron } from './services/reminders.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'http://localhost:5173',
+  'https://tvoy-dietolog.ru',
+  'http://tvoy-dietolog.ru',
+  'https://www.tvoy-dietolog.ru',
+];
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
+  })
+);
 app.use(express.json());
 
 app.get('/api/health', (_req, res) => {
