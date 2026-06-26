@@ -1,18 +1,31 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { setStoredToken } from '../utils/telegram';
+import { setStoredToken, openExternalLink } from '../utils/telegram';
+import { OFFER_URL, PRIVACY_URL } from '../constants/legal';
+
+const linkButtonStyle: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  padding: 0,
+  color: 'var(--primary)',
+  fontWeight: 600,
+  cursor: 'pointer',
+  fontSize: 'inherit',
+  textDecoration: 'underline',
+};
 
 export function Register() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password) return;
+    if (!email.trim() || !password || !consentAccepted) return;
 
     setLoading(true);
     setError('');
@@ -52,11 +65,61 @@ export function Register() {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Минимум 6 символов"
             autoComplete="new-password"
-            style={{ width: '100%', marginBottom: 12 }}
+            style={{ width: '100%', marginBottom: 16 }}
           />
+          <label
+            style={{
+              display: 'flex',
+              gap: 10,
+              alignItems: 'flex-start',
+              marginBottom: 16,
+              fontSize: 13,
+              lineHeight: 1.5,
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={consentAccepted}
+              onChange={(e) => setConsentAccepted(e.target.checked)}
+              style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }}
+            />
+            <span>
+              Я принимаю условия{' '}
+              <button
+                type="button"
+                style={linkButtonStyle}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openExternalLink(OFFER_URL);
+                }}
+              >
+                оферты
+              </button>{' '}
+              и{' '}
+              <button
+                type="button"
+                style={linkButtonStyle}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openExternalLink(PRIVACY_URL);
+                }}
+              >
+                политику конфиденциальности
+              </button>
+              . Сервис носит информационный характер и не является медицинской рекомендацией.
+            </span>
+          </label>
           {error && <p className="error-text" style={{ marginBottom: 12 }}>{error}</p>}
-          <button type="submit" className="btn-primary" disabled={loading || !email.trim() || !password}>
-            {loading ? 'Регистрация...' : 'Зарегистрироваться'}
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={loading || !email.trim() || !password || !consentAccepted}
+          >
+            {loading ? 'Создание...' : 'Создать аккаунт'}
           </button>
         </form>
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 14, color: 'var(--text-secondary)' }}>
