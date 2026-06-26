@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { OFFER_URL } from '../constants/legal';
-import { openExternalLink } from '../utils/telegram';
+import { openExternalLink, isTelegramWebApp } from '../utils/telegram';
 
 interface Props {
   onClose: () => void;
@@ -22,10 +22,14 @@ export function Paywall({ onClose, isPremium, premiumExpiresAt }: Props) {
     setError('');
     try {
       const { paymentUrl } = await api.createPayment();
-      openExternalLink(paymentUrl);
+      if (isTelegramWebApp()) {
+        openExternalLink(paymentUrl);
+        setLoading(false);
+      } else {
+        window.location.href = paymentUrl;
+      }
     } catch {
       setError('Не удалось открыть оплату. Попробуйте позже.');
-    } finally {
       setLoading(false);
     }
   };

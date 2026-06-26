@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
+import { getMoscowDate } from '../utils/date';
 
 type Achievement = {
   id: string;
@@ -57,7 +58,7 @@ export function Progress() {
     }
   };
 
-  const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  const today = getMoscowDate().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <div className="screen-content">

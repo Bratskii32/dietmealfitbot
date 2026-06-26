@@ -28,6 +28,7 @@ const allowedOrigins = [
   'https://tvoy-dietolog.ru',
   'http://tvoy-dietolog.ru',
   'https://www.tvoy-dietolog.ru',
+  'http://www.tvoy-dietolog.ru',
 ];
 
 app.use(

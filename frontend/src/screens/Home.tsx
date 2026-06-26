@@ -7,6 +7,7 @@ import { ShoppingListModal } from '../components/ShoppingListModal';
 import { ReplaceChoiceSheet } from '../components/ReplaceChoiceSheet';
 import { api } from '../api/client';
 import { parseApiError } from '../utils/errors';
+import { getMoscowDate } from '../utils/date';
 import { WeekPlan, Recipe, Screen } from '../types';
 
 interface Props {
@@ -393,7 +394,7 @@ export function Home({
     return <p className="error-text">Рацион не найден</p>;
   }
 
-  const today = new Date();
+  const today = getMoscowDate();
   const displayDate = new Date(today);
   displayDate.setDate(today.getDate() + dayIndex);
   const dayName = DAY_NAMES[displayDate.getDay()];
