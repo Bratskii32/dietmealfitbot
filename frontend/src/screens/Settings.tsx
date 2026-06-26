@@ -37,6 +37,7 @@ export function Settings({
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showSupportHint, setShowSupportHint] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
@@ -44,7 +45,6 @@ export function Settings({
   const [toast, setToast] = useState<string | null>(null);
   const [savedEmail, setSavedEmail] = useState<string | null>(null);
   const [emailInput, setEmailInput] = useState('');
-  const [editingEmail, setEditingEmail] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
 
@@ -86,6 +86,19 @@ export function Settings({
     setPromoCode('');
   };
 
+  const openEmailModal = () => {
+    setEmailError('');
+    setEmailInput('');
+    setShowEmailModal(true);
+  };
+
+  const closeEmailModal = () => {
+    if (emailLoading) return;
+    setShowEmailModal(false);
+    setEmailError('');
+    setEmailInput('');
+  };
+
   const toggleNotifications = async () => {
     const next = !notificationsEnabled;
     setNotificationsEnabled(next);
@@ -116,7 +129,7 @@ export function Settings({
     try {
       const data = await api.saveEmail(emailInput.trim());
       setSavedEmail(data.email);
-      setEditingEmail(false);
+      setShowEmailModal(false);
       setEmailInput('');
     } catch (err: unknown) {
       const e = err as { message?: string };
@@ -172,59 +185,19 @@ export function Settings({
         <span style={{ color: 'var(--text-secondary)' }}>→</span>
       </button>
 
-      <div className="card" style={{ marginBottom: 10 }}>
-        <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 15 }}>📧 Email для связи</div>
-        {savedEmail && !editingEmail ? (
-          <>
-            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>
-              ✓ {savedEmail}
-            </p>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                setEditingEmail(true);
-                setEmailInput(savedEmail);
-                setEmailError('');
-              }}
-            >
-              Изменить
-            </button>
-          </>
-        ) : (
-          <>
-            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>
-              Оставь email — напишем даже если Telegram будет недоступен
-            </p>
-            <input
-              type="email"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              placeholder="example@mail.ru"
-              autoComplete="email"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: '2px solid var(--border)',
-                borderRadius: 12,
-                fontSize: 16,
-                marginBottom: 10,
-              }}
-            />
-            {emailError && (
-              <p className="error-text" style={{ marginBottom: 10 }}>{emailError}</p>
-            )}
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={handleSaveEmail}
-              disabled={emailLoading || !emailInput.trim()}
-            >
-              {emailLoading ? 'Сохранение...' : 'Сохранить'}
-            </button>
-          </>
-        )}
-      </div>
+      {savedEmail ? (
+        <div
+          className="card"
+          style={{ marginBottom: 10, color: 'var(--text-secondary)', fontSize: 15 }}
+        >
+          📧 {savedEmail}
+        </div>
+      ) : (
+        <button className="card" style={listButtonStyle} onClick={openEmailModal}>
+          <span>📧 Добавить email</span>
+          <span style={{ color: 'var(--text-secondary)' }}>→</span>
+        </button>
+      )}
 
       <button className="card" style={listButtonStyle} onClick={onConfigureRation}>
         <span>⚙️ Настроить рацион</span>
@@ -285,6 +258,51 @@ export function Settings({
         <span>🔒 Политика конфиденциальности</span>
         <span style={{ color: 'var(--text-secondary)' }}>→</span>
       </button>
+
+      {showEmailModal && (
+        <div className="modal-overlay" onClick={closeEmailModal}>
+          <div className="modal-content modal-bottom" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, marginBottom: 8 }}>Email для связи</h3>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+              Оставь email — напишем даже если Telegram будет недоступен
+            </p>
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              placeholder="example@mail.ru"
+              autoComplete="email"
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                border: '2px solid var(--border)',
+                borderRadius: 12,
+                fontSize: 16,
+                marginBottom: 12,
+              }}
+            />
+            {emailError && (
+              <p className="error-text" style={{ marginBottom: 12 }}>{emailError}</p>
+            )}
+            <button
+              className="btn-primary"
+              onClick={handleSaveEmail}
+              disabled={emailLoading || !emailInput.trim()}
+            >
+              {emailLoading ? 'Сохранение...' : 'Сохранить'}
+            </button>
+            <button
+              className="btn-secondary"
+              style={{ marginTop: 10 }}
+              onClick={closeEmailModal}
+              disabled={emailLoading}
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
 
       {showPromoModal && (
         <div className="modal-overlay" onClick={closePromoModal}>
