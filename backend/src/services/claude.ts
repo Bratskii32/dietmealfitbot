@@ -453,15 +453,13 @@ async function askClaude(prompt: string, maxTokens = 256): Promise<string> {
 }
 
 export function getMoscowHour(): number {
-  return parseInt(
-    new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Moscow', hour: 'numeric', hour12: false }).format(new Date()),
-    10
-  );
+  return (new Date().getUTCHours() + 3) % 24;
 }
 
 export function getStatusPeriod(hour: number): 'morning' | 'day' | 'evening' {
   if (hour >= 5 && hour <= 11) return 'morning';
   if (hour >= 12 && hour <= 17) return 'day';
+  // evening (18-22) and night (23-4) share status_evening
   return 'evening';
 }
 
@@ -487,22 +485,37 @@ export async function generatePeriodStatus(params: {
   let prompt: string;
 
   if (params.period === 'morning') {
-    prompt = `Напиши короткое утреннее приветствие максимум 8 слов для пользователя приложения питания.
-Имя: ${params.name}, цель: ${goalLabel}, день: ${params.dayOfWeek}.
-Тон: бодрый, мотивирующий, как от друга утром.
-Пример: 'Максим, отличное начало недели! 💪'
+    prompt = `Ты дружелюбный AI-диетолог. Напиши короткое персональное утреннее приветствие максимум 8 слов.
+Имя: ${params.name}
+Цель: ${goalLabel}
+День недели: ${params.dayOfWeek}
+Тон: бодрый, как сообщение от друга утром.
+Примеры стиля:
+'Максим, отличное начало недели! 💪'
+'Понедельник — лучший день начать, ${params.name}! 🌅'
+'Новый день — новые силы, ${params.name}! ⚡'
 Только текст, без JSON, без кавычек.`;
   } else if (params.period === 'day') {
-    prompt = `Напиши короткий дневной статус максимум 8 слов.
-Имя: ${params.name}, цель: ${goalLabel}.
-Тон: поддерживающий, энергичный.
-Пример: 'Держишь курс, Максим — так и надо 🎯'
+    prompt = `Ты дружелюбный AI-диетолог. Напиши короткий персональный дневной статус максимум 8 слов.
+Имя: ${params.name}
+Цель: ${goalLabel}
+День недели: ${params.dayOfWeek}
+Тон: поддерживающий, энергичный, середина дня.
+Примеры стиля:
+'Держишь курс, ${params.name} — так и надо 🎯'
+'Середина недели — ты справляешься, ${params.name}! 💪'
+'Обед по плану, ${params.name}? Отлично идёшь! 🥗'
 Только текст, без JSON, без кавычек.`;
   } else {
-    prompt = `Напиши короткий вечерний статус максимум 8 слов.
-Имя: ${params.name}, цель: ${goalLabel}.
+    prompt = `Ты дружелюбный AI-диетолог. Напиши короткий персональный вечерний статус максимум 8 слов.
+Имя: ${params.name}
+Цель: ${goalLabel}
+День недели: ${params.dayOfWeek}
 Тон: тёплый, подводящий итог дня.
-Пример: 'Хороший день, Максим! Ты молодец 🌙'
+Примеры стиля:
+'Хороший день, ${params.name}! Ты молодец 🌙'
+'Пятница удалась, ${params.name}! Отдыхай 🔥'
+'Ещё один день позади, ${params.name} — горжусь! ⭐'
 Только текст, без JSON, без кавычек.`;
   }
 

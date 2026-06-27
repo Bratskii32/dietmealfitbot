@@ -8,7 +8,7 @@ import {
 import { AuthRequest } from '../middleware/auth.js';
 import { resolvePremiumUser } from '../services/premium.js';
 import { FREEMIUM } from '../config/freemium.js';
-import { suggestWhatToEat } from '../services/claude.js';
+import { suggestWhatToEat, getMoscowHour } from '../services/claude.js';
 import { getOrCreatePeriodStatus } from '../services/dailyStatus.js';
 import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
 
@@ -69,14 +69,7 @@ router.post('/what-to-eat', async (req: AuthRequest, res: Response) => {
       eatingStyle: user.eating_style || null,
       cookingTime: user.cooking_time || null,
     };
-    const hour = parseInt(
-      new Intl.DateTimeFormat('en-US', {
-        timeZone: 'Europe/Moscow',
-        hour: 'numeric',
-        hour12: false,
-      }).format(new Date()),
-      10
-    );
+    const hour = getMoscowHour();
     const suggestion = await suggestWhatToEat(profile, hour);
 
     let newUsed = used;
