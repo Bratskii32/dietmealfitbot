@@ -156,7 +156,7 @@ function validateDayCalories(day: DayPlan, dailyCalories: number): DayPlan {
   const actualCalories = day.meals.reduce((sum, meal) => sum + meal.recipe.calories, 0);
   if (actualCalories <= 0) return day;
 
-  if (Math.abs(actualCalories - dailyCalories) > dailyCalories * 0.15) {
+  if (Math.abs(actualCalories - dailyCalories) > dailyCalories * 0.25) {
     const coefficient = dailyCalories / actualCalories;
     return {
       ...day,
@@ -219,8 +219,12 @@ const ALLERGY_MAP: Record<string, string> = {
   none: 'Нет ограничений',
 };
 
-const PLAN_CALORIES_RULE = `Калории по дням могут варьироваться ±150 ккал от нормы — это физиологично. Не делай все дни одинаковыми.
-Перед формированием финального JSON проверь сумму calories по каждому дню: она должна быть в пределах dailyCalories ± 150 ккал. При необходимости скорректируй граммовку ингредиентов.`;
+const PLAN_CALORIES_RULE = `Калории по дням должны ВАРЬИРОВАТЬСЯ естественно:
+- Одни дни чуть больше нормы (+100-200 ккал)
+- Другие дни чуть меньше нормы (-100-200 ккал)
+- За неделю в среднем норма соблюдается
+- НЕ делай все дни одинаковыми — это неестественно
+- Допустимый диапазон каждого дня: от (dailyCalories - 200) до (dailyCalories + 200)`;
 
 const PLAN_FRUIT_SNACK_RULE = `Фрукты в качестве отдельного перекуса указывай в штуках с примерным весом в скобках:
 '1 среднее яблоко (~150г)', '1 банан (~120г)', '1 апельсин (~180г)'.
@@ -299,7 +303,8 @@ ${PLAN_FRUIT_SNACK_RULE}
 1. Каждый раз УНИКАЛЬНЫЙ рацион — используй seed
    ${randomSeed} и дату ${currentDate}.
 2. Не повторяй блюда в рамках одной недели.
-3. Строго соблюдай цель по калориям и БЖУ.
+3. Соблюдай цель по калориям в среднем за неделю,
+   но каждый день может отличаться на ±150-200 ккал.
 
 Данные пользователя:
 - Возраст: ${profile.age}, пол: ${profile.gender === 'male' ? 'Мужской' : 'Женский'}
