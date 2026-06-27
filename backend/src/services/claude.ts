@@ -150,13 +150,20 @@ function scaleRecipeMacros(recipe: Recipe, coefficient: number): Recipe {
   };
 }
 
+function scaleRecipeCalories(recipe: Recipe, coefficient: number): Recipe {
+  return {
+    ...recipe,
+    calories: roundMacro(recipe.calories * coefficient),
+  };
+}
+
 function validateDayCalories(day: DayPlan, dailyCalories: number): DayPlan {
   if (dailyCalories <= 0 || day.meals.length === 0) return day;
 
   const actualCalories = day.meals.reduce((sum, meal) => sum + meal.recipe.calories, 0);
   if (actualCalories <= 0) return day;
 
-  if (Math.abs(actualCalories - dailyCalories) > dailyCalories * 0.25) {
+  if (Math.abs(actualCalories - dailyCalories) > dailyCalories * 0.3) {
     const coefficient = dailyCalories / actualCalories;
     return {
       ...day,
@@ -170,9 +177,31 @@ function validateDayCalories(day: DayPlan, dailyCalories: number): DayPlan {
   return day;
 }
 
+function addNaturalVariation(days: DayPlan[], dailyCalories: number): DayPlan[] {
+  if (dailyCalories <= 0) return days;
+
+  return days.map((day) => {
+    if (day.meals.length === 0) return day;
+
+    const actualCalories = day.meals.reduce((sum, meal) => sum + meal.recipe.calories, 0);
+    if (actualCalories <= 0) return day;
+
+    const variation = Math.random() * 300 - 150;
+    const coefficient = (dailyCalories + variation) / actualCalories;
+
+    return {
+      ...day,
+      meals: day.meals.map((meal) => ({
+        ...meal,
+        recipe: scaleRecipeCalories(meal.recipe, coefficient),
+      })),
+    };
+  });
+}
+
 export function normalizeWeekPlan(plan: WeekPlan): WeekPlan {
   const dailyCalories = toNumber(plan.dailyCalories, 2000);
-  const days = (plan.days || []).map((d, i) =>
+  const validatedDays = (plan.days || []).map((d, i) =>
     validateDayCalories(normalizeDayPlan(d, i + 1), dailyCalories)
   );
 
@@ -181,7 +210,7 @@ export function normalizeWeekPlan(plan: WeekPlan): WeekPlan {
     dailyProtein: toNumber(plan.dailyProtein, 100),
     dailyCarbs: toNumber(plan.dailyCarbs, 200),
     dailyFat: toNumber(plan.dailyFat, 60),
-    days,
+    days: addNaturalVariation(validatedDays, dailyCalories),
   };
 }
 
