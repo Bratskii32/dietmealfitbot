@@ -6,6 +6,10 @@ import {
 } from '../db/repository.js';
 import { getBot } from '../bot/instance.js';
 
+function isTelegramChatId(userId: string): boolean {
+  return /^\d+$/.test(userId);
+}
+
 export function isPremiumActive(user: UserRow | undefined): boolean {
   if (!user) return false;
   if (user.is_lifetime_premium) return true;
@@ -146,7 +150,7 @@ export async function notifyPremiumRevoked(telegramId: string) {
 
 export async function notifyPromoActivated(telegramId: string, days: number, expiresAt: string) {
   const bot = getBot();
-  if (!bot) return;
+  if (!bot || !isTelegramChatId(telegramId)) return;
   const date = formatPremiumDate(expiresAt);
   await bot.sendMessage(
     Number(telegramId),
