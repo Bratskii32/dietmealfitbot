@@ -6,13 +6,13 @@ import { notifyPromoActivated } from '../services/premium.js';
 const router = Router();
 
 router.post('/activate', async (req: AuthRequest, res: Response) => {
-  const { code } = req.body as { code?: string };
-  if (!code?.trim()) {
+  const code = req.body.code?.toString().trim().toUpperCase();
+  if (!code) {
     return res.status(400).json({ error: 'invalid_code', message: 'Введите промокод' });
   }
 
   try {
-    const result = await activatePromoCode(code.trim(), req.telegramId!);
+    const result = await activatePromoCode(code, req.telegramId!);
     await notifyPromoActivated(req.telegramId!, result.days, result.premiumUntil);
     const untilLabel = new Date(result.premiumUntil).toLocaleDateString('ru-RU', {
       day: 'numeric',

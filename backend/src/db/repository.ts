@@ -701,6 +701,23 @@ export class PromoCodeError extends Error {
   }
 }
 
+function mapPromoCodeRow(row: PromoCodeRow) {
+  return {
+    id: row.id,
+    code: row.code,
+    days: row.days,
+    maxUses: row.max_uses,
+    usedCount: row.used_count,
+    expiresAt: row.expires_at
+      ? (row.expires_at instanceof Date
+          ? row.expires_at.toISOString().split('T')[0]
+          : String(row.expires_at))
+      : null,
+    isActive: row.is_active,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
 export async function createPromoCode(data: {
   code: string;
   days: number;
@@ -724,20 +741,22 @@ export async function createPromoCode(data: {
     [normalizedCode, data.days, data.maxUses ?? null, data.expiresAt ?? null]
   );
   const row = rows[0];
-  return {
-    id: row.id,
-    code: row.code,
-    days: row.days,
-    maxUses: row.max_uses,
-    usedCount: row.used_count,
-    expiresAt: row.expires_at
-      ? (row.expires_at instanceof Date
-          ? row.expires_at.toISOString().split('T')[0]
-          : String(row.expires_at))
-      : null,
-    isActive: row.is_active,
-    createdAt: row.created_at.toISOString(),
-  };
+  return mapPromoCodeRow(row);
+}
+
+export async function getAllPromoCodes(): Promise<ReturnType<typeof mapPromoCodeRow>[]> {
+  const { rows } = await query<PromoCodeRow>(
+    'SELECT * FROM promo_codes ORDER BY created_at DESC'
+  );
+  return rows.map(mapPromoCodeRow);
+}
+
+export async function deactivatePromoCode(id: number): Promise<boolean> {
+  const { rowCount } = await query(
+    'UPDATE promo_codes SET is_active = FALSE WHERE id = $1',
+    [id]
+  );
+  return (rowCount ?? 0) > 0;
 }
 
 export async function activatePromoCode(
@@ -751,7 +770,7 @@ export async function activatePromoCode(
 
     const { rows } = await client.query<PromoCodeRow>(
       `SELECT * FROM promo_codes WHERE UPPER(code) = UPPER($1) FOR UPDATE`,
-      [code.trim()]
+      [code.trim().toUpperCase()]
     );
     const promo = rows[0];
 

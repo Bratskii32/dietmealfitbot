@@ -5,6 +5,8 @@ import {
   grantPremiumDays,
   revokePremiumAccess,
   createPromoCode,
+  getAllPromoCodes,
+  deactivatePromoCode,
   getUser,
   getActiveUsersForBroadcast,
 } from '../db/repository.js';
@@ -81,20 +83,21 @@ router.post('/revoke-premium', adminAuth, async (req: Request, res: Response) =>
 });
 
 router.post('/create-promo', adminAuth, async (req: Request, res: Response) => {
-  const { code, days, maxUses, expiresAt } = req.body as {
+  const { days, maxUses, expiresAt } = req.body as {
     code?: string;
     days?: number;
     maxUses?: number | null;
     expiresAt?: string | null;
   };
+  const code = req.body.code?.toString().trim().toUpperCase();
 
-  if (!code?.trim() || !days || days < 1) {
+  if (!code || !days || days < 1) {
     return res.status(400).json({ error: 'code and positive days required' });
   }
 
   try {
     const promo = await createPromoCode({
-      code: code.trim(),
+      code,
       days,
       maxUses: maxUses ?? null,
       expiresAt: expiresAt ?? null,
@@ -106,6 +109,34 @@ router.post('/create-promo', adminAuth, async (req: Request, res: Response) => {
       return res.status(409).json({ error: 'duplicate', message: 'Промокод уже существует' });
     }
     console.error('Create promo error:', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+router.get('/promos', adminAuth, async (_req: Request, res: Response) => {
+  try {
+    const promos = await getAllPromoCodes();
+    res.json({ promos });
+  } catch (err) {
+    console.error('List promos error:', err);
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+router.post('/deactivate-promo', adminAuth, async (req: Request, res: Response) => {
+  const { id } = req.body as { id?: number };
+  if (!id || id < 1) {
+    return res.status(400).json({ error: 'id required' });
+  }
+
+  try {
+    const updated = await deactivatePromoCode(id);
+    if (!updated) {
+      return res.status(404).json({ error: 'not_found', message: 'Промокод не найден' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Deactivate promo error:', err);
     res.status(500).json({ error: 'internal error' });
   }
 });

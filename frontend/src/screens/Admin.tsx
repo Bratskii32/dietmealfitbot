@@ -22,6 +22,15 @@ interface AdminStats {
   recent_payments: { date: string; amount: number }[];
 }
 
+interface AdminPromo {
+  id: number;
+  code: string;
+  days: number;
+  maxUses: number | null;
+  usedCount: number;
+  isActive: boolean;
+}
+
 async function fetchStats(token: string): Promise<AdminStats> {
   const res = await fetch(`${API_URL}/admin/stats`, {
     headers: { 'X-Admin-Token': token },
@@ -47,6 +56,48 @@ async function sendBroadcast(
   if (res.status === 401) throw new Error('unauthorized');
   if (!res.ok) throw new Error('broadcast_failed');
   return res.json();
+}
+
+async function fetchPromos(token: string): Promise<AdminPromo[]> {
+  const res = await fetch(`${API_URL}/admin/promos`, {
+    headers: { 'X-Admin-Token': token },
+  });
+  if (res.status === 401) throw new Error('unauthorized');
+  if (!res.ok) throw new Error('fetch_promos_failed');
+  const data = await res.json();
+  return data.promos ?? [];
+}
+
+async function createPromo(
+  token: string,
+  payload: { code: string; days: number; maxUses: number | null }
+): Promise<void> {
+  const res = await fetch(`${API_URL}/admin/create-promo`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Admin-Token': token,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new Error('unauthorized');
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.message || data.error || 'create_promo_failed');
+  }
+}
+
+async function deactivatePromo(token: string, id: number): Promise<void> {
+  const res = await fetch(`${API_URL}/admin/deactivate-promo`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Admin-Token': token,
+    },
+    body: JSON.stringify({ id }),
+  });
+  if (res.status === 401) throw new Error('unauthorized');
+  if (!res.ok) throw new Error('deactivate_promo_failed');
 }
 
 function formatChartDate(iso: string): string {
@@ -84,6 +135,32 @@ export function Admin() {
   const [broadcastLoading, setBroadcastLoading] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState('');
   const [broadcastError, setBroadcastError] = useState('');
+  const [promos, setPromos] = useState<AdminPromo[]>([]);
+  const [promosLoading, setPromosLoading] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoDays, setPromoDays] = useState('');
+  const [promoMaxUses, setPromoMaxUses] = useState('');
+  const [promoCreateLoading, setPromoCreateLoading] = useState(false);
+  const [promoCreateSuccess, setPromoCreateSuccess] = useState('');
+  const [promoCreateError, setPromoCreateError] = useState('');
+  const [promoDeactivateLoading, setPromoDeactivateLoading] = useState<number | null>(null);
+
+  const loadPromos = useCallback(async (authToken: string) => {
+    setPromosLoading(true);
+    try {
+      const data = await fetchPromos(authToken);
+      setPromos(data);
+    } catch (err) {
+      if ((err as Error).message === 'unauthorized') {
+        localStorage.removeItem(ADMIN_STORAGE_KEY);
+        setAuthenticated(false);
+        setToken('');
+        setError('Неверный пароль');
+      }
+    } finally {
+      setPromosLoading(false);
+    }
+  }, []);
 
   const loadStats = useCallback(async (authToken: string) => {
     setLoading(true);
@@ -93,6 +170,7 @@ export function Admin() {
       setStats(data);
       setAuthenticated(true);
       localStorage.setItem(ADMIN_STORAGE_KEY, authToken);
+      await loadPromos(authToken);
     } catch (err) {
       if ((err as Error).message === 'unauthorized') {
         localStorage.removeItem(ADMIN_STORAGE_KEY);
@@ -105,7 +183,7 @@ export function Admin() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadPromos]);
 
   useEffect(() => {
     if (token) loadStats(token);
@@ -127,6 +205,67 @@ export function Admin() {
     setBroadcastMessage('');
     setBroadcastResult('');
     setBroadcastError('');
+    setPromos([]);
+    setPromoCode('');
+    setPromoDays('');
+    setPromoMaxUses('');
+    setPromoCreateSuccess('');
+    setPromoCreateError('');
+  };
+
+  const handleCreatePromo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !promoCode.trim() || !promoDays.trim()) return;
+
+    const days = Number(promoDays);
+    const maxUses = promoMaxUses.trim() ? Number(promoMaxUses) : null;
+    if (!Number.isFinite(days) || days < 1) {
+      setPromoCreateError('Укажите корректное число дней');
+      return;
+    }
+    if (maxUses !== null && (!Number.isFinite(maxUses) || maxUses < 1)) {
+      setPromoCreateError('Укажите корректное число использований');
+      return;
+    }
+
+    setPromoCreateLoading(true);
+    setPromoCreateSuccess('');
+    setPromoCreateError('');
+
+    try {
+      await createPromo(token, { code: promoCode.trim(), days, maxUses });
+      setPromoCreateSuccess('✅ Промокод создан!');
+      setPromoCode('');
+      setPromoDays('');
+      setPromoMaxUses('');
+      await loadPromos(token);
+    } catch (err) {
+      if ((err as Error).message === 'unauthorized') {
+        handleLogout();
+        setError('Неверный пароль');
+      } else {
+        setPromoCreateError((err as Error).message || 'Не удалось создать промокод');
+      }
+    } finally {
+      setPromoCreateLoading(false);
+    }
+  };
+
+  const handleDeactivatePromo = async (id: number) => {
+    if (!token) return;
+
+    setPromoDeactivateLoading(id);
+    try {
+      await deactivatePromo(token, id);
+      await loadPromos(token);
+    } catch (err) {
+      if ((err as Error).message === 'unauthorized') {
+        handleLogout();
+        setError('Неверный пароль');
+      }
+    } finally {
+      setPromoDeactivateLoading(null);
+    }
   };
 
   const handleBroadcast = async (e: React.FormEvent) => {
@@ -253,6 +392,106 @@ export function Admin() {
               </div>
             ))
           )}
+        </div>
+
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>🎟 Промокоды</h2>
+          <form onSubmit={handleCreatePromo}>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+              Код
+            </label>
+            <input
+              type="text"
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value)}
+              placeholder="DIET7"
+              style={{ width: '100%', marginBottom: 12 }}
+            />
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+              Дней Premium
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={promoDays}
+              onChange={(e) => setPromoDays(e.target.value)}
+              placeholder="7"
+              style={{ width: '100%', marginBottom: 12 }}
+            />
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+              Макс. использований
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={promoMaxUses}
+              onChange={(e) => setPromoMaxUses(e.target.value)}
+              placeholder="50"
+              style={{ width: '100%', marginBottom: 12 }}
+            />
+            {promoCreateError && (
+              <p className="error-text" style={{ marginBottom: 12 }}>{promoCreateError}</p>
+            )}
+            {promoCreateSuccess && (
+              <p style={{ color: '#4CAF50', fontSize: 14, marginBottom: 12, fontWeight: 600 }}>
+                {promoCreateSuccess}
+              </p>
+            )}
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={promoCreateLoading || !promoCode.trim() || !promoDays.trim()}
+            >
+              {promoCreateLoading ? 'Создание...' : 'Создать промокод'}
+            </button>
+          </form>
+
+          <div style={{ marginTop: 24 }}>
+            <div style={{ fontWeight: 600, marginBottom: 12 }}>Существующие промокоды</div>
+            {promosLoading ? (
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Загрузка...</p>
+            ) : promos.length === 0 ? (
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Промокодов пока нет</p>
+            ) : (
+              promos.map((promo, i) => (
+                <div
+                  key={promo.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '12px 0',
+                    borderBottom: i < promos.length - 1 ? '1px solid var(--border)' : undefined,
+                    fontSize: 14,
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600 }}>{promo.code}</div>
+                    <div style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
+                      {promo.days} дн. · {promo.usedCount}/{promo.maxUses ?? '∞'} ·{' '}
+                      {promo.isActive ? 'активен' : 'неактивен'}
+                    </div>
+                  </div>
+                  {promo.isActive && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeactivatePromo(promo.id)}
+                      disabled={promoDeactivateLoading === promo.id}
+                      style={{
+                        background: 'none',
+                        color: '#e53935',
+                        fontSize: 13,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {promoDeactivateLoading === promo.id ? '...' : 'Деактивировать'}
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         <div className="card">
