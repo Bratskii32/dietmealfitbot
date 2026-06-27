@@ -199,6 +199,14 @@ function addNaturalVariation(days: DayPlan[], dailyCalories: number): DayPlan[] 
   });
 }
 
+export function applyNaturalVariation(plan: WeekPlan): WeekPlan {
+  const dailyCalories = toNumber(plan.dailyCalories, 2000);
+  return {
+    ...plan,
+    days: addNaturalVariation(plan.days, dailyCalories),
+  };
+}
+
 export function normalizeWeekPlan(plan: WeekPlan): WeekPlan {
   const dailyCalories = toNumber(plan.dailyCalories, 2000);
   const validatedDays = (plan.days || []).map((d, i) =>
@@ -210,7 +218,7 @@ export function normalizeWeekPlan(plan: WeekPlan): WeekPlan {
     dailyProtein: toNumber(plan.dailyProtein, 100),
     dailyCarbs: toNumber(plan.dailyCarbs, 200),
     dailyFat: toNumber(plan.dailyFat, 60),
-    days: addNaturalVariation(validatedDays, dailyCalories),
+    days: validatedDays,
   };
 }
 
@@ -394,7 +402,8 @@ JSON структура:
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('Не удалось распарсить ответ AI');
 
-  const result = normalizeWeekPlan(JSON.parse(jsonMatch[0]) as WeekPlan);
+  const normalized = normalizeWeekPlan(JSON.parse(jsonMatch[0]) as WeekPlan);
+  const result = applyNaturalVariation(normalized);
   console.log('dailyCalories from Claude:', result.dailyCalories);
   console.log('day1 actual calories:', result.days[0]?.meals
     .reduce((sum, m) => sum + m.recipe.calories, 0));
@@ -678,9 +687,12 @@ ingredients — массив объектов {name, amount, unit}. instructions
     parsed = obj.days;
   }
 
-  return parsed.map((day, i) =>
-    validateDayCalories(normalizeDayPlan(day, fromDay + i), toNumber(existingPlan.dailyCalories, 2000))
+  const dailyCalories = toNumber(existingPlan.dailyCalories, 2000);
+  const validatedDays = parsed.map((day, i) =>
+    validateDayCalories(normalizeDayPlan(day, fromDay + i), dailyCalories)
   );
+
+  return addNaturalVariation(validatedDays, dailyCalories);
 }
 
 export async function generateAchievementReward(

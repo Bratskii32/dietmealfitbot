@@ -12,10 +12,9 @@ import {
   getWeeklyQueryCount,
   logEvent,
   saveShoppingList,
-  updatePlanData,
 } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
-import { generateMealPlan, generateMealPlanExtension, suggestMealReplacement, generateShoppingList, WeekPlan, normalizeWeekPlan } from '../services/claude.js';
+import { generateMealPlan, generateMealPlanExtension, suggestMealReplacement, generateShoppingList, WeekPlan } from '../services/claude.js';
 import { FREEMIUM } from '../config/freemium.js';
 import { resolvePremiumUser } from '../services/premium.js';
 import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
@@ -44,7 +43,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     return res.json({ plan: null, isPremium, maxDays: isPremium ? FREEMIUM.PREMIUM_DAYS : FREEMIUM.FREE_DAYS });
   }
 
-  const fullPlan = normalizeWeekPlan(JSON.parse(plan.plan_data) as WeekPlan);
+  const fullPlan = JSON.parse(plan.plan_data) as WeekPlan;
   res.json({
     plan: filterPlanByTier(fullPlan, isPremium),
     isPremium,
@@ -127,8 +126,7 @@ router.post('/extend', async (req: AuthRequest, res: Response) => {
     await logEvent(req.telegramId!, 'plan_generated');
 
     const updated = await getLatestPlan(req.telegramId!);
-    const merged = normalizeWeekPlan(JSON.parse(updated!.plan_data) as WeekPlan);
-    await updatePlanData(req.telegramId!, JSON.stringify(merged));
+    const merged = JSON.parse(updated!.plan_data) as WeekPlan;
 
     res.json({
       plan: merged,
