@@ -344,6 +344,13 @@ JSON структура:
   ]
 }`;
 
+  console.log('generateMealPlan params:', JSON.stringify({
+    days,
+    profile,
+    eatingStyle,
+    cookingTime,
+  }));
+
   const response = await client.messages.create({
     model: 'claude-haiku-4-5',
     max_tokens: 16000,
@@ -358,7 +365,11 @@ JSON структура:
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('Не удалось распарсить ответ AI');
 
-  return normalizeWeekPlan(JSON.parse(jsonMatch[0]) as WeekPlan);
+  const result = normalizeWeekPlan(JSON.parse(jsonMatch[0]) as WeekPlan);
+  console.log('dailyCalories from Claude:', result.dailyCalories);
+  console.log('day1 actual calories:', result.days[0]?.meals
+    .reduce((sum, m) => sum + m.recipe.calories, 0));
+  return result;
 }
 
 export async function chatWithDietitian(
