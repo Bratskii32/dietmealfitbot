@@ -128,6 +128,10 @@ CREATE INDEX IF NOT EXISTS idx_achievements_user ON achievements(user_id);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_auth_email ON users (LOWER(email)) WHERE password_hash IS NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS status_morning TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS status_day TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS status_evening TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS status_date DATE;
 `;
 
 export async function initSchema(): Promise<void> {

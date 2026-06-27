@@ -44,8 +44,8 @@ async function sendMorningReminders() {
       const breakfast = getBreakfastForPlanDay(plan, dayIndex);
       if (!breakfast) continue;
 
-      let status = user.daily_status;
-      if (!status || user.daily_status_date !== today) {
+      let status = user.status_morning;
+      if (!status || user.status_date !== today) {
         const fullUser = await getUser(user.telegram_id);
         if (fullUser) {
           status = await getOrCreateDailyStatus(fullUser);

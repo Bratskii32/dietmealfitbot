@@ -19,6 +19,10 @@ export interface UserRow {
   subscription_cancelled?: number;
   daily_status?: string;
   daily_status_date?: string;
+  status_morning?: string;
+  status_day?: string;
+  status_evening?: string;
+  status_date?: string;
   progress_ai_comment?: string;
   progress_ai_comment_date?: string;
   onboarding_complete?: number;

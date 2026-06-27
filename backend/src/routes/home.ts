@@ -4,61 +4,25 @@ import {
   parseAllergies,
   getAdviceQueryCount,
   incrementSnackAdvice,
-  setDailyStatus,
 } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { resolvePremiumUser } from '../services/premium.js';
 import { FREEMIUM } from '../config/freemium.js';
-import {
-  generateLiveGreeting,
-  getDefaultLiveGreeting,
-  getMoscowHour,
-  getTimeOfDayLabel,
-  suggestWhatToEat,
-} from '../services/claude.js';
+import { suggestWhatToEat } from '../services/claude.js';
+import { getOrCreatePeriodStatus } from '../services/dailyStatus.js';
 import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
 
 const router = Router();
-
-const DAY_NAMES = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
-
-function getTodayMoscow(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date());
-}
-
-function getMoscowDayOfWeek(): string {
-  const dayIndex = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Europe/Moscow' })
-  ).getDay();
-  return DAY_NAMES[dayIndex];
-}
 
 router.get('/status', async (req: AuthRequest, res: Response) => {
   const { user } = await resolvePremiumUser(req.telegramId!);
   if (!user) return res.json({ status: '' });
 
-  const today = getTodayMoscow();
-  if (user.daily_status && user.daily_status_date === today) {
-    return res.json({ status: user.daily_status });
-  }
-
-  const hour = getMoscowHour();
-  const timeOfDay = getTimeOfDayLabel(hour);
-  const name = user.name || user.first_name || 'друг';
-
   try {
-    const status = await generateLiveGreeting({
-      name,
-      goal: user.goal || 'maintain',
-      dayOfWeek: getMoscowDayOfWeek(),
-      timeOfDay,
-    });
-    await setDailyStatus(req.telegramId!, status, today);
+    const status = await getOrCreatePeriodStatus(user);
     res.json({ status });
   } catch {
-    const fallback = getDefaultLiveGreeting(name, timeOfDay);
-    await setDailyStatus(req.telegramId!, fallback, today);
-    res.json({ status: fallback });
+    res.json({ status: '' });
   }
 });
 
@@ -105,7 +69,14 @@ router.post('/what-to-eat', async (req: AuthRequest, res: Response) => {
       eatingStyle: user.eating_style || null,
       cookingTime: user.cooking_time || null,
     };
-    const hour = getMoscowHour();
+    const hour = parseInt(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Europe/Moscow',
+        hour: 'numeric',
+        hour12: false,
+      }).format(new Date()),
+      10
+    );
     const suggestion = await suggestWhatToEat(profile, hour);
 
     let newUsed = used;

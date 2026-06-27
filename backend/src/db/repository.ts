@@ -23,6 +23,10 @@ type DbUser = {
   subscription_cancelled: boolean;
   daily_status: string | null;
   daily_status_date: string | null;
+  status_morning: string | null;
+  status_day: string | null;
+  status_evening: string | null;
+  status_date: string | null;
   progress_ai_comment: string | null;
   progress_ai_comment_date: string | null;
   onboarding_complete: boolean;
@@ -66,6 +70,10 @@ function mapUser(row: DbUser): UserRow {
     subscription_cancelled: boolToInt(row.subscription_cancelled),
     daily_status: row.daily_status ?? undefined,
     daily_status_date: row.daily_status_date ?? undefined,
+    status_morning: row.status_morning ?? undefined,
+    status_day: row.status_day ?? undefined,
+    status_evening: row.status_evening ?? undefined,
+    status_date: row.status_date ?? undefined,
     progress_ai_comment: row.progress_ai_comment ?? undefined,
     progress_ai_comment_date: row.progress_ai_comment_date ?? undefined,
     onboarding_complete: boolToInt(row.onboarding_complete),
@@ -244,6 +252,21 @@ export async function setDailyStatus(telegramId: string, status: string, date: s
     'UPDATE users SET daily_status = $2, daily_status_date = $3 WHERE telegram_id = $1',
     [telegramId, status, date]
   );
+}
+
+export async function setPeriodStatus(
+  telegramId: string,
+  period: 'morning' | 'day' | 'evening',
+  status: string,
+  date: string
+): Promise<void> {
+  const column =
+    period === 'morning' ? 'status_morning' : period === 'day' ? 'status_day' : 'status_evening';
+  await query(`UPDATE users SET ${column} = $2, status_date = $3 WHERE telegram_id = $1`, [
+    telegramId,
+    status,
+    date,
+  ]);
 }
 
 export async function setProgressComment(telegramId: string, comment: string, date: string): Promise<void> {
@@ -520,8 +543,8 @@ export async function getUsersWithPlansForReminders(): Promise<
     first_name: string | null;
     plan_data: unknown;
     plan_created_at: string;
-    daily_status: string | null;
-    daily_status_date: string | null;
+    status_morning: string | null;
+    status_date: string | null;
     last_seen_at: string | null;
     goal: string | null;
     premium_until: string | null;
@@ -534,14 +557,14 @@ export async function getUsersWithPlansForReminders(): Promise<
     first_name: string | null;
     plan_data: unknown;
     plan_created_at: Date;
-    daily_status: string | null;
-    daily_status_date: string | null;
+    status_morning: string | null;
+    status_date: string | null;
     last_seen_at: Date | null;
     goal: string | null;
     premium_until: Date | null;
     is_lifetime_premium: boolean;
   }>(
-    `SELECT u.telegram_id, u.name, u.first_name, u.daily_status, u.daily_status_date,
+    `SELECT u.telegram_id, u.name, u.first_name, u.status_morning, u.status_date,
             u.last_seen_at, u.goal, u.premium_until, u.is_lifetime_premium,
             wp.plan_data, wp.created_at AS plan_created_at
      FROM users u
@@ -558,8 +581,8 @@ export async function getUsersWithPlansForReminders(): Promise<
     first_name: r.first_name,
     plan_data: r.plan_data,
     plan_created_at: r.plan_created_at.toISOString(),
-    daily_status: r.daily_status,
-    daily_status_date: r.daily_status_date,
+    status_morning: r.status_morning,
+    status_date: r.status_date,
     last_seen_at: r.last_seen_at?.toISOString() || null,
     goal: r.goal,
     premium_until: r.premium_until?.toISOString() || null,

@@ -2,7 +2,7 @@ import { useState, useEffect, type CSSProperties } from 'react';
 import { api } from '../api/client';
 import { OFFER_URL, PRIVACY_URL } from '../constants/legal';
 import { ErrorToast } from '../components/ErrorToast';
-import { openExternalLink, closeMiniApp } from '../utils/telegram';
+import { openExternalLink, closeMiniApp, isTelegramWebApp, clearStoredToken } from '../utils/telegram';
 
 interface Props {
   onShowPaywall: () => void;
@@ -47,6 +47,9 @@ export function Settings({
   const [emailInput, setEmailInput] = useState('');
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+
+  const isWeb = !isTelegramWebApp();
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -163,6 +166,11 @@ export function Settings({
     }
   };
 
+  const confirmLogout = () => {
+    clearStoredToken();
+    window.location.href = '/login';
+  };
+
   return (
     <div className="screen-content">
       <h2 style={{ fontSize: 22, marginBottom: 20 }}>Настройки ⚙️</h2>
@@ -258,6 +266,17 @@ export function Settings({
         <span>🔒 Политика конфиденциальности</span>
         <span style={{ color: 'var(--text-secondary)' }}>→</span>
       </button>
+
+      {isWeb && (
+        <button
+          className="card"
+          style={{ ...listButtonStyle, color: '#e53935', marginBottom: 0 }}
+          onClick={() => setShowLogoutDialog(true)}
+        >
+          <span>Выйти из аккаунта</span>
+          <span style={{ color: 'var(--text-secondary)' }}>→</span>
+        </button>
+      )}
 
       {showEmailModal && (
         <div className="modal-overlay" onClick={closeEmailModal}>
@@ -377,6 +396,23 @@ export function Settings({
             </button>
             <button className="btn-secondary" style={{ marginTop: 10 }} onClick={() => setShowCancelDialog(false)}>
               Нет, оставить
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showLogoutDialog && (
+        <div className="modal-overlay" onClick={() => setShowLogoutDialog(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, marginBottom: 12 }}>Выйти из аккаунта?</h3>
+            <p style={{ marginBottom: 20, lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+              Вы выйдете из веб-версии. Для входа снова потребуется email и пароль.
+            </p>
+            <button className="btn-primary" style={{ background: '#e53935' }} onClick={confirmLogout}>
+              Выйти
+            </button>
+            <button className="btn-secondary" style={{ marginTop: 10 }} onClick={() => setShowLogoutDialog(false)}>
+              Отмена
             </button>
           </div>
         </div>

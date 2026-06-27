@@ -37,11 +37,35 @@ export default function App() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [showPlanHistory, setShowPlanHistory] = useState(false);
   const [planVersion, setPlanVersion] = useState(0);
+  const [dailyStatus, setDailyStatus] = useState('');
+  const [statusLoading, setStatusLoading] = useState(true);
 
   useEffect(() => {
     if (!isReady) return;
     checkUser();
   }, [isReady]);
+
+  useEffect(() => {
+    if (appState !== 'app') return;
+
+    let cancelled = false;
+    setStatusLoading(true);
+
+    api.getDailyStatus()
+      .then((data) => {
+        if (!cancelled) setDailyStatus(data.status);
+      })
+      .catch(() => {
+        if (!cancelled) setDailyStatus('');
+      })
+      .finally(() => {
+        if (!cancelled) setStatusLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appState]);
 
   const loadSubscription = async () => {
     try {
@@ -147,6 +171,8 @@ export default function App() {
           preferencesPrompted={preferencesPrompted}
           planVersion={planVersion}
           dayIndex={homeDayIndex}
+          dailyStatus={dailyStatus}
+          statusLoading={statusLoading}
           onDayIndexChange={setHomeDayIndex}
           onNavigate={setScreen}
           onRecipeSelect={setSelectedRecipe}

@@ -150,13 +150,6 @@ function scaleRecipeMacros(recipe: Recipe, coefficient: number): Recipe {
   };
 }
 
-function scaleRecipeCalories(recipe: Recipe, coefficient: number): Recipe {
-  return {
-    ...recipe,
-    calories: roundMacro(recipe.calories * coefficient),
-  };
-}
-
 function validateDayCalories(day: DayPlan, dailyCalories: number): DayPlan {
   if (dailyCalories <= 0 || day.meals.length === 0) return day;
 
@@ -193,7 +186,7 @@ function addNaturalVariation(days: DayPlan[], dailyCalories: number): DayPlan[] 
       ...day,
       meals: day.meals.map((meal) => ({
         ...meal,
-        recipe: scaleRecipeCalories(meal.recipe, coefficient),
+        recipe: scaleRecipeMacros(meal.recipe, coefficient),
       })),
     };
   });
@@ -464,6 +457,56 @@ export function getMoscowHour(): number {
     new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Moscow', hour: 'numeric', hour12: false }).format(new Date()),
     10
   );
+}
+
+export function getStatusPeriod(hour: number): 'morning' | 'day' | 'evening' {
+  if (hour >= 5 && hour <= 11) return 'morning';
+  if (hour >= 12 && hour <= 17) return 'day';
+  return 'evening';
+}
+
+export function getDefaultPeriodStatus(name: string, period: 'morning' | 'day' | 'evening'): string {
+  const n = name || 'друг';
+  switch (period) {
+    case 'morning':
+      return `Доброе утро, ${n}! 🌅`;
+    case 'day':
+      return `Держишься отлично, ${n}! 💪`;
+    default:
+      return `Хороший вечер, ${n}! 🌙`;
+  }
+}
+
+export async function generatePeriodStatus(params: {
+  name: string;
+  goal: string;
+  dayOfWeek: string;
+  period: 'morning' | 'day' | 'evening';
+}): Promise<string> {
+  const goalLabel = GOAL_MAP[params.goal] || params.goal;
+  let prompt: string;
+
+  if (params.period === 'morning') {
+    prompt = `Напиши короткое утреннее приветствие максимум 8 слов для пользователя приложения питания.
+Имя: ${params.name}, цель: ${goalLabel}, день: ${params.dayOfWeek}.
+Тон: бодрый, мотивирующий, как от друга утром.
+Пример: 'Максим, отличное начало недели! 💪'
+Только текст, без JSON, без кавычек.`;
+  } else if (params.period === 'day') {
+    prompt = `Напиши короткий дневной статус максимум 8 слов.
+Имя: ${params.name}, цель: ${goalLabel}.
+Тон: поддерживающий, энергичный.
+Пример: 'Держишь курс, Максим — так и надо 🎯'
+Только текст, без JSON, без кавычек.`;
+  } else {
+    prompt = `Напиши короткий вечерний статус максимум 8 слов.
+Имя: ${params.name}, цель: ${goalLabel}.
+Тон: тёплый, подводящий итог дня.
+Пример: 'Хороший день, Максим! Ты молодец 🌙'
+Только текст, без JSON, без кавычек.`;
+  }
+
+  return askClaude(prompt, 60);
 }
 
 export function getTimeOfDayLabel(hour: number): string {

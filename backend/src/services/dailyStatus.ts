@@ -1,11 +1,11 @@
 import { UserRow } from '../db/types.js';
 import {
-  generateLiveGreeting,
-  getDefaultLiveGreeting,
+  generatePeriodStatus,
+  getDefaultPeriodStatus,
   getMoscowHour,
-  getTimeOfDayLabel,
+  getStatusPeriod,
 } from './claude.js';
-import { setDailyStatus } from '../db/repository.js';
+import { setPeriodStatus } from '../db/repository.js';
 
 const DAY_NAMES = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
 
@@ -20,30 +20,41 @@ function getMoscowDayOfWeek(): string {
   return DAY_NAMES[dayIndex];
 }
 
-export async function getOrCreateDailyStatus(user: UserRow): Promise<string> {
-  const today = getTodayMoscow();
-  if (user.daily_status && user.daily_status_date === today) {
-    return user.daily_status;
-  }
+function getCachedPeriodStatus(
+  user: UserRow,
+  period: 'morning' | 'day' | 'evening',
+  today: string
+): string | null {
+  if (user.status_date !== today) return null;
+  if (period === 'morning') return user.status_morning || null;
+  if (period === 'day') return user.status_day || null;
+  return user.status_evening || null;
+}
 
-  const hour = getMoscowHour();
-  const timeOfDay = getTimeOfDayLabel(hour);
+export async function getOrCreatePeriodStatus(user: UserRow): Promise<string> {
+  const today = getTodayMoscow();
+  const period = getStatusPeriod(getMoscowHour());
+
+  const cached = getCachedPeriodStatus(user, period, today);
+  if (cached) return cached;
+
   const name = user.name || user.first_name || 'друг';
+  const goal = user.goal || 'maintain';
+  const dayOfWeek = getMoscowDayOfWeek();
 
   try {
-    const status = await generateLiveGreeting({
-      name,
-      goal: user.goal || 'maintain',
-      dayOfWeek: getMoscowDayOfWeek(),
-      timeOfDay,
-    });
-    await setDailyStatus(user.telegram_id, status, today);
+    const status = await generatePeriodStatus({ name, goal, dayOfWeek, period });
+    await setPeriodStatus(user.telegram_id, period, status, today);
     return status;
   } catch {
-    const fallback = getDefaultLiveGreeting(name, timeOfDay);
-    await setDailyStatus(user.telegram_id, fallback, today);
+    const fallback = getDefaultPeriodStatus(name, period);
+    await setPeriodStatus(user.telegram_id, period, fallback, today);
     return fallback;
   }
+}
+
+export async function getOrCreateDailyStatus(user: UserRow): Promise<string> {
+  return getOrCreatePeriodStatus(user);
 }
 
 export function wasActiveRecently(lastSeenAt: string | null | undefined): boolean {

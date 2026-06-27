@@ -17,6 +17,8 @@ interface Props {
   preferencesPrompted?: boolean;
   planVersion?: number;
   dayIndex: number;
+  dailyStatus: string;
+  statusLoading: boolean;
   onDayIndexChange: (index: number) => void;
   onNavigate: (screen: Screen) => void;
   onRecipeSelect: (recipe: Recipe) => void;
@@ -55,6 +57,8 @@ export function Home({
   preferencesPrompted = true,
   planVersion = 0,
   dayIndex,
+  dailyStatus,
+  statusLoading,
   onDayIndexChange,
   onNavigate,
   onRecipeSelect,
@@ -68,8 +72,6 @@ export function Home({
   const [totalDays, setTotalDays] = useState(3);
   const [extendLoading, setExtendLoading] = useState(false);
   const [regenerateLoading, setRegenerateLoading] = useState(false);
-  const [dailyStatus, setDailyStatus] = useState('');
-  const [statusLoading, setStatusLoading] = useState(true);
   const [snackRemaining, setSnackRemaining] = useState(3);
   const [snackSuggestion, setSnackSuggestion] = useState('');
   const [snackWarning, setSnackWarning] = useState('');
@@ -116,7 +118,6 @@ export function Home({
   const loadAll = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
-    setStatusLoading(true);
     try {
       const [planData, snackStatus] = await Promise.all([
         api.getPlan(),
@@ -134,15 +135,6 @@ export function Home({
       setLoading(false);
       setRefreshing(false);
       setPullDistance(0);
-    }
-
-    try {
-      const statusData = await api.getDailyStatus();
-      setDailyStatus(statusData.status);
-    } catch {
-      setDailyStatus('');
-    } finally {
-      setStatusLoading(false);
     }
   }, []);
 
