@@ -2,7 +2,6 @@ import { Router, Response } from 'express';
 import {
   getWeightLog,
   getCookedCount,
-  getCookedDates,
   upsertWeight,
   getUser,
   setProgressComment,
@@ -10,7 +9,7 @@ import {
 } from '../db/repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { generateProgressComment } from '../services/claude.js';
-import { calcStreak, getAchievementProgress } from '../services/achievements.js';
+import { getAchievementProgress } from '../services/achievements.js';
 
 const router = Router();
 
@@ -27,9 +26,8 @@ function daysLabel(n: number): string {
 router.get('/', async (req: AuthRequest, res: Response) => {
   const weightLog = await getWeightLog(req.telegramId!);
   const cookedCount = await getCookedCount(req.telegramId!);
-  const cookedDates = await getCookedDates(req.telegramId!);
-  const streak = calcStreak(cookedDates);
   const user = await getUser(req.telegramId!);
+  const streak = user?.streak_count ?? 0;
   const today = getToday();
 
   let aiComment = user?.progress_ai_comment || '';

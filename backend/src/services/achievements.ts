@@ -2,7 +2,6 @@ import { getBot } from '../bot/instance.js';
 import {
   getUser,
   getCookedCount,
-  getCookedDates,
   hasAchievement,
   unlockAchievement,
   setAchievementReward,
@@ -60,19 +59,6 @@ const STREAK_THRESHOLDS = [
   { key: 'streak_14', min: 14 },
   { key: 'streak_30', min: 30 },
 ];
-
-function calcStreak(cookedDates: string[]): number {
-  let streak = 0;
-  const today = new Date();
-  for (let i = 0; i < cookedDates.length; i++) {
-    const expected = new Date(today);
-    expected.setDate(expected.getDate() - i);
-    const expectedStr = expected.toISOString().split('T')[0];
-    if (cookedDates[i] === expectedStr) streak++;
-    else break;
-  }
-  return streak;
-}
 
 async function notifyAchievement(telegramId: string, title: string, rewardContent: string) {
   const bot = getBot();
@@ -182,8 +168,7 @@ export async function checkAchievements(
   if (!user?.onboarding_complete) return;
 
   const cookedCount = await getCookedCount(telegramId);
-  const cookedDates = await getCookedDates(telegramId);
-  const streak = calcStreak(cookedDates);
+  const streak = user.streak_count ?? 0;
 
   if (options.isFirstLogin) {
     await unlockOne(telegramId, 'first_steps', user);
@@ -232,5 +217,3 @@ export function getAchievementProgress(streak: number, cookedCount: number): {
     };
   });
 }
-
-export { calcStreak };

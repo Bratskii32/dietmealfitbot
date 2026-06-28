@@ -132,6 +132,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS status_morning TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS status_day TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS status_evening TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS status_date DATE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_count INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_visit_date DATE;
 `;
 
 export async function initSchema(): Promise<void> {

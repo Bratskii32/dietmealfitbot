@@ -35,6 +35,8 @@ export interface UserRow {
   preferences_prompted?: number;
   email?: string;
   last_seen_at?: string;
+  streak_count?: number;
+  last_visit_date?: string;
   created_at?: string;
   updated_at?: string;
 }

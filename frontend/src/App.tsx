@@ -14,7 +14,7 @@ import { Paywall } from './screens/Paywall';
 import { PlanHistory } from './screens/PlanHistory';
 import { PreferencesSheet } from './components/PreferencesSheet';
 import { Navigation } from './components/Navigation';
-import { Screen, Recipe, WeekPlan } from './types';
+import { Screen, Recipe, WeekPlan, RecipeHistoryContext } from './types';
 
 type AppState = 'loading' | 'onboarding' | 'app';
 
@@ -36,6 +36,7 @@ export default function App() {
   const [cookingTime, setCookingTime] = useState<string | null>(null);
   const [showPreferences, setShowPreferences] = useState(false);
   const [showPlanHistory, setShowPlanHistory] = useState(false);
+  const [historyRestore, setHistoryRestore] = useState<RecipeHistoryContext | null>(null);
   const [planVersion, setPlanVersion] = useState(0);
   const [dailyStatus, setDailyStatus] = useState('');
   const [statusLoading, setStatusLoading] = useState(true);
@@ -123,6 +124,15 @@ export default function App() {
     setPreferencesPrompted(true);
   };
 
+  const handleRecipeSelect = (recipe: Recipe, history?: RecipeHistoryContext) => {
+    setSelectedRecipe(recipe);
+    setHistoryRestore(history ?? null);
+  };
+
+  const handleRecipeBack = () => {
+    setSelectedRecipe(null);
+  };
+
   if (appState === 'loading') {
     return (
       <div className="spinner-container">
@@ -145,7 +155,7 @@ export default function App() {
   if (selectedRecipe) {
     return (
       <div className="app-container">
-        <RecipeDetail recipe={selectedRecipe} onBack={() => setSelectedRecipe(null)} />
+        <RecipeDetail recipe={selectedRecipe} onBack={handleRecipeBack} />
       </div>
     );
   }
@@ -154,8 +164,14 @@ export default function App() {
     return (
       <div className="app-container">
         <PlanHistory
-          onClose={() => setShowPlanHistory(false)}
-          onRecipeSelect={setSelectedRecipe}
+          onClose={() => {
+            setShowPlanHistory(false);
+            setHistoryRestore(null);
+          }}
+          onRecipeSelect={handleRecipeSelect}
+          restorePlanId={historyRestore?.planId ?? null}
+          restoreDayIndex={historyRestore?.dayIndex ?? 0}
+          onRestoreClear={() => setHistoryRestore(null)}
         />
       </div>
     );
@@ -175,13 +191,13 @@ export default function App() {
           statusLoading={statusLoading}
           onDayIndexChange={setHomeDayIndex}
           onNavigate={setScreen}
-          onRecipeSelect={setSelectedRecipe}
+          onRecipeSelect={handleRecipeSelect}
           onShowPaywall={() => setShowPaywall(true)}
           onOpenPreferences={() => setShowPreferences(true)}
         />
       )}
       {screen === 'chat' && <Chat onShowPaywall={() => setShowPaywall(true)} />}
-      {screen === 'recipes' && <Recipes onRecipeSelect={setSelectedRecipe} />}
+      {screen === 'recipes' && <Recipes onRecipeSelect={(recipe) => handleRecipeSelect(recipe)} />}
       {screen === 'progress' && <Progress />}
       {screen === 'settings' && (
         <Settings

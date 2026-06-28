@@ -69,6 +69,12 @@ export interface RecipeListItem {
 
 export type Screen = 'home' | 'chat' | 'recipes' | 'progress' | 'settings';
 
+export interface RecipeHistoryContext {
+  planId: number;
+  dayNumber: number;
+  dayIndex: number;
+}
+
 export interface SubscriptionStatus {
   isPremium: boolean;
   premiumExpiresAt: string | null;
