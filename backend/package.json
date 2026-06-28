@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "fix-calories": "node dist/scripts/fixCalories.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
