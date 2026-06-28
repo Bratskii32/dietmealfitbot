@@ -170,8 +170,22 @@ function validateDayCalories(day: DayPlan, dailyCalories: number): DayPlan {
   return day;
 }
 
-function addNaturalVariation(days: DayPlan[], dailyCalories: number): DayPlan[] {
+function getVariationRange(goal?: string): { min: number; max: number } {
+  switch (goal) {
+    case 'lose':
+      return { min: -150, max: 0 };
+    case 'gain':
+      return { min: -100, max: 50 };
+    case 'maintain':
+    default:
+      return { min: -75, max: 50 };
+  }
+}
+
+function addNaturalVariation(days: DayPlan[], dailyCalories: number, goal?: string): DayPlan[] {
   if (dailyCalories <= 0) return days;
+
+  const { min, max } = getVariationRange(goal);
 
   return days.map((day) => {
     if (day.meals.length === 0) return day;
@@ -179,8 +193,9 @@ function addNaturalVariation(days: DayPlan[], dailyCalories: number): DayPlan[] 
     const actualCalories = day.meals.reduce((sum, meal) => sum + meal.recipe.calories, 0);
     if (actualCalories <= 0) return day;
 
-    const variation = Math.random() * 300 - 150;
-    const coefficient = (dailyCalories + variation) / actualCalories;
+    const variation = Math.random() * (max - min) + min;
+    const rawCoeff = (dailyCalories + variation) / actualCalories;
+    const coefficient = Math.max(0.94, Math.min(1.03, rawCoeff));
 
     return {
       ...day,
@@ -192,11 +207,11 @@ function addNaturalVariation(days: DayPlan[], dailyCalories: number): DayPlan[] 
   });
 }
 
-export function applyNaturalVariation(plan: WeekPlan): WeekPlan {
+export function applyNaturalVariation(plan: WeekPlan, goal?: string): WeekPlan {
   const dailyCalories = toNumber(plan.dailyCalories, 2000);
   return {
     ...plan,
-    days: addNaturalVariation(plan.days, dailyCalories),
+    days: addNaturalVariation(plan.days, dailyCalories, goal),
   };
 }
 
@@ -396,7 +411,7 @@ JSON структура:
   if (!jsonMatch) throw new Error('Не удалось распарсить ответ AI');
 
   const normalized = normalizeWeekPlan(JSON.parse(jsonMatch[0]) as WeekPlan);
-  const result = applyNaturalVariation(normalized);
+  const result = applyNaturalVariation(normalized, profile.goal);
   console.log('dailyCalories from Claude:', result.dailyCalories);
   console.log('day1 actual calories:', result.days[0]?.meals
     .reduce((sum, m) => sum + m.recipe.calories, 0));
@@ -748,7 +763,7 @@ ingredients — массив объектов {name, amount, unit}. instructions
     validateDayCalories(normalizeDayPlan(day, fromDay + i), dailyCalories)
   );
 
-  return addNaturalVariation(validatedDays, dailyCalories);
+  return addNaturalVariation(validatedDays, dailyCalories, profile.goal);
 }
 
 export async function generateAchievementReward(
