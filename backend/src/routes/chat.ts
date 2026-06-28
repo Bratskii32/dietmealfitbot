@@ -13,6 +13,7 @@ import { chatWithDietitian } from '../services/claude.js';
 import { FREEMIUM } from '../config/freemium.js';
 import { resolvePremiumUser } from '../services/premium.js';
 import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
+import { updateStreak } from '../services/streak.js';
 
 const router = Router();
 const WEEKLY_LIMIT = FREEMIUM.FREE_CHAT_WEEKLY;
@@ -36,7 +37,10 @@ router.get('/messages', async (req: AuthRequest, res: Response) => {
   });
 });
 
-router.post('/send', async (req: AuthRequest, res: Response) => {
+router.post('/send', sendMessage);
+router.post('/', sendMessage);
+
+async function sendMessage(req: AuthRequest, res: Response) {
   const { message } = req.body;
   if (!message?.trim()) {
     return res.status(400).json({ error: 'Сообщение пустое' });
@@ -79,6 +83,7 @@ router.post('/send', async (req: AuthRequest, res: Response) => {
     await insertChatMessage(req.telegramId!, 'user', message);
     await insertChatMessage(req.telegramId!, 'assistant', reply);
     await logEvent(req.telegramId!, 'chat_message_sent');
+    await updateStreak(req.telegramId!);
 
     let newUsed = used;
     if (!isPremium) {
@@ -101,6 +106,6 @@ router.post('/send', async (req: AuthRequest, res: Response) => {
       return serviceUnavailableResponse(res);
     }
   }
-});
+}
 
 export default router;

@@ -37,6 +37,7 @@ export interface UserRow {
   last_seen_at?: string;
   streak_count?: number;
   last_visit_date?: string;
+  last_activity_date?: string;
   created_at?: string;
   updated_at?: string;
 }

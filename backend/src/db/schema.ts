@@ -134,6 +134,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS status_evening TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS status_date DATE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_count INTEGER DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_visit_date DATE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_date DATE;
+UPDATE users SET last_activity_date = last_visit_date WHERE last_activity_date IS NULL AND last_visit_date IS NOT NULL;
 `;
 
 export async function initSchema(): Promise<void> {

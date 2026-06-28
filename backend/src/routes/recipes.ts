@@ -5,6 +5,7 @@ import { FREEMIUM } from '../config/freemium.js';
 import { WeekPlan } from '../services/claude.js';
 import { resolvePremiumUser } from '../services/premium.js';
 import { checkAchievements } from '../services/achievements.js';
+import { updateStreak } from '../services/streak.js';
 
 const router = Router();
 
@@ -14,6 +15,17 @@ const MEAL_TYPE_LABELS: Record<string, string> = {
   dinner: 'Ужин',
   snack: 'Перекус',
 };
+
+function findRecipeInPlan(planData: WeekPlan, recipeName: string) {
+  for (const day of planData.days) {
+    for (const meal of day.meals || []) {
+      if (meal.recipe.name === recipeName) {
+        return meal.recipe;
+      }
+    }
+  }
+  return null;
+}
 
 router.get('/', async (req: AuthRequest, res: Response) => {
   const { isPremium } = await resolvePremiumUser(req.telegramId!);
@@ -54,6 +66,23 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   res.json({ recipes, isPremium, maxDays });
 });
 
+router.get('/:id', async (req: AuthRequest, res: Response) => {
+  const rawId = req.params.id;
+  const recipeName = decodeURIComponent(Array.isArray(rawId) ? rawId[0] : rawId);
+  await updateStreak(req.telegramId!);
+
+  const plan = await getLatestPlan(req.telegramId!);
+  if (plan) {
+    const planData = JSON.parse(plan.plan_data) as WeekPlan;
+    const recipe = findRecipeInPlan(planData, recipeName);
+    if (recipe) {
+      return res.json({ recipe });
+    }
+  }
+
+  res.json({ recipe: null });
+});
+
 router.post('/cooked', async (req: AuthRequest, res: Response) => {
   const { recipeName } = req.body;
   if (!recipeName) {
@@ -61,6 +90,7 @@ router.post('/cooked', async (req: AuthRequest, res: Response) => {
   }
 
   await insertCookedRecipe(req.telegramId!, recipeName);
+  await updateStreak(req.telegramId!);
   checkAchievements(req.telegramId!).catch(() => {});
 
   res.json({ success: true });

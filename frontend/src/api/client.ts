@@ -232,6 +232,9 @@ export const api = {
 
   getRecipes: () => request<{ recipes: import('../types').RecipeListItem[] }>('/recipes'),
 
+  viewRecipe: (recipeName: string) =>
+    request<{ recipe: import('../types').Recipe }>(`/recipes/${encodeURIComponent(recipeName)}`),
+
   markCooked: (recipeName: string) =>
     request('/recipes/cooked', { method: 'POST', body: JSON.stringify({ recipeName }) }),
 

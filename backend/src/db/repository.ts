@@ -2,16 +2,6 @@ import { query, now, getPool } from './pool.js';
 import { randomUUID } from 'crypto';
 import { UserRow, ChatMessageRow, WeekPlanRow, EventType } from './types.js';
 
-function getTodayMoscow(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date());
-}
-
-function getYesterdayMoscow(): string {
-  const [y, m, d] = getTodayMoscow().split('-').map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d - 1));
-  return date.toISOString().slice(0, 10);
-}
-
 type DbUser = {
   telegram_id: string;
   first_name: string | null;
@@ -52,6 +42,7 @@ type DbUser = {
   last_seen_at: Date | null;
   streak_count: number;
   last_visit_date: string | null;
+  last_activity_date: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -100,6 +91,7 @@ function mapUser(row: DbUser): UserRow {
     last_seen_at: row.last_seen_at?.toISOString(),
     streak_count: row.streak_count ?? 0,
     last_visit_date: row.last_visit_date ?? undefined,
+    last_activity_date: row.last_activity_date ?? undefined,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };
@@ -409,25 +401,11 @@ export async function updateLastSeen(telegramId: string): Promise<number> {
   const user = await getUser(telegramId);
   const previous = user?.last_seen_at ? new Date(user.last_seen_at) : null;
   const timestamp = now();
-  const today = getTodayMoscow();
-  const yesterday = getYesterdayMoscow();
 
-  let streakCount = user?.streak_count ?? 0;
-  const lastVisit = user?.last_visit_date;
-
-  if (lastVisit !== today) {
-    if (lastVisit === yesterday) {
-      streakCount += 1;
-    } else {
-      streakCount = 1;
-    }
-  }
-
-  await query(
-    `UPDATE users SET last_seen_at = $2, updated_at = $2, streak_count = $3, last_visit_date = $4
-     WHERE telegram_id = $1`,
-    [telegramId, timestamp, streakCount, today]
-  );
+  await query('UPDATE users SET last_seen_at = $2, updated_at = $2 WHERE telegram_id = $1', [
+    telegramId,
+    timestamp,
+  ]);
 
   if (!previous) return 0;
   const diffMs = Date.now() - previous.getTime();

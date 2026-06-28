@@ -100,7 +100,12 @@ export function Progress() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
         <StatCard label="Рецептов приготовлено" value={cookedCount} icon="👨‍🍳" />
-        <StatCard label="Дней подряд" value={streak} icon="🔥" />
+        <StatCard
+          label="Дней подряд"
+          value={streak}
+          icon="🔥"
+          hint="Открывай рецепты или общайся с диетологом каждый день чтобы не прерывать серию"
+        />
       </div>
 
       <h3 style={{ fontSize: 16, marginBottom: 12 }}>Достижения</h3>
@@ -175,11 +180,16 @@ export function Progress() {
   );
 }
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: string }) {
+function StatCard({ label, value, icon, hint }: { label: string; value: number; icon: string; hint?: string }) {
   return (
     <div className="card" style={{ textAlign: 'center', marginBottom: 0 }}>
       <div style={{ fontSize: 28 }}>{icon}</div>
       <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--primary)', margin: '4px 0' }}>{value}</div>
+      {hint && (
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4, lineHeight: 1.4 }}>
+          {hint}
+        </div>
+      )}
       <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</div>
     </div>
   );

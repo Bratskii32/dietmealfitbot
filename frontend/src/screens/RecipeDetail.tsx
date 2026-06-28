@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Recipe } from '../types';
 import { api } from '../api/client';
 
@@ -9,6 +9,10 @@ interface Props {
 
 export function RecipeDetail({ recipe, onBack }: Props) {
   const [cooked, setCooked] = useState(false);
+
+  useEffect(() => {
+    api.viewRecipe(recipe.name).catch(() => {});
+  }, [recipe.name]);
 
   const handleCooked = async () => {
     try {

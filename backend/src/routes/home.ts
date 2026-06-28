@@ -11,6 +11,7 @@ import { FREEMIUM } from '../config/freemium.js';
 import { suggestWhatToEat, getMoscowHour } from '../services/claude.js';
 import { getOrCreatePeriodStatus } from '../services/dailyStatus.js';
 import { handleClaudeError, serviceUnavailableResponse } from '../services/claudeErrors.js';
+import { updateStreak } from '../services/streak.js';
 
 const router = Router();
 
@@ -38,7 +39,10 @@ router.get('/what-to-eat/status', async (req: AuthRequest, res: Response) => {
   });
 });
 
-router.post('/what-to-eat', async (req: AuthRequest, res: Response) => {
+router.post('/what-to-eat', handleWhatToEat);
+router.post('/advice', handleWhatToEat);
+
+async function handleWhatToEat(req: AuthRequest, res: Response) {
   const { isPremium, user } = await resolvePremiumUser(req.telegramId!);
   if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
 
@@ -72,6 +76,8 @@ router.post('/what-to-eat', async (req: AuthRequest, res: Response) => {
     const hour = getMoscowHour();
     const suggestion = await suggestWhatToEat(profile, hour);
 
+    await updateStreak(req.telegramId!);
+
     let newUsed = used;
     if (!isPremium) {
       newUsed = await incrementSnackAdvice(req.telegramId!);
@@ -91,6 +97,6 @@ router.post('/what-to-eat', async (req: AuthRequest, res: Response) => {
       return serviceUnavailableResponse(res);
     }
   }
-});
+}
 
 export default router;
